@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.venv/
+venv/
+build/
+dist/
+*.spec.bak
+
+# Node / Vite
+node_modules/
+ui/dist/
+ui/.vite/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local artifacts
+*.log
+*.sqlite
+
+# Generated icon (produced by scripts/make_icon.py during build)
+packaging/icon.ico
