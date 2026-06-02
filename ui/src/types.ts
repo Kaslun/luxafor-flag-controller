@@ -36,6 +36,7 @@ export interface State {
   manual_override: ManualOverride | null;
   update_available: UpdateAvailable | null;
   conflict_detected: ConflictDetected | null;
+  autostart_enabled: boolean;
   updated_at: string;
 }
 

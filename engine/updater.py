@@ -27,7 +27,7 @@ from engine.version import __version__
 
 log = get_logger()
 
-_OWNER = os.environ.get("BEACON_UPDATE_OWNER", "your-org")
+_OWNER = os.environ.get("BEACON_UPDATE_OWNER", "Kaslun")
 _REPO = os.environ.get("BEACON_UPDATE_REPO", "luxafor-flag-controller")
 
 _MANIFEST_URL = (

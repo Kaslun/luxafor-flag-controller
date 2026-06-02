@@ -1,6 +1,6 @@
 {
   "_comment": "Publish this as a release asset named version.json. The engine fetches it from the release CDN (not the GitHub API) to check for updates. Bump 'version' to match the released engine version; 'url' is informational (the engine links to the releases page).",
   "version": "0.1.0",
-  "url": "https://github.com/your-org/luxafor-flag-controller/releases",
+  "url": "https://github.com/Kaslun/luxafor-flag-controller/releases",
   "notes": "First release."
 }

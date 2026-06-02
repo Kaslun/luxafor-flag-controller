@@ -1,0 +1,84 @@
+name: Release
+
+# Tag a release to build and publish the exe:
+#   git tag v0.1.0 && git push origin v0.1.0
+# Builds beacon.exe and attaches it plus version.json (which the in-app
+# updater fetches from the release CDN) to a GitHub Release.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install engine (with dev deps)
+        run: pip install -e ".[dev]"
+
+      - name: Build UI
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build
+
+      # bash avoids PowerShell treating PyInstaller's stderr logging as an error
+      - name: Generate icon
+        shell: bash
+        run: python scripts/make_icon.py
+
+      - name: Bundle exe
+        shell: bash
+        run: pyinstaller packaging/beacon.spec --noconfirm --clean
+
+      - name: Stamp version.json
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from engine.version import __version__
+          repo = "${{ github.repository }}"
+          manifest = {
+              "version": __version__,
+              "url": f"https://github.com/{repo}/releases",
+              "notes": "${{ github.ref_name }}",
+          }
+          with open("dist/version.json", "w", encoding="utf-8") as f:
+              json.dump(manifest, f, indent=2)
+          print("wrote dist/version.json", manifest)
+          PY
+
+      - name: Verify version.json matches the tag
+        shell: bash
+        run: |
+          tag="${{ github.ref_name }}"
+          ver="v$(python -c 'from engine.version import __version__; print(__version__)')"
+          if [ "$tag" != "$ver" ]; then
+            echo "::error::tag $tag does not match engine version $ver — bump engine/version.py"
+            exit 1
+          fi
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/beacon.exe
+            dist/version.json
+          generate_release_notes: true

@@ -132,6 +132,14 @@ def create_app(engine) -> FastAPI:
     def post_recheck():
         return {"conflict_detected": engine.recheck_conflict()}
 
+    @app.post("/api/autostart")
+    def post_autostart():
+        return {"autostart_enabled": engine.set_autostart(True)}
+
+    @app.delete("/api/autostart")
+    def delete_autostart():
+        return {"autostart_enabled": engine.set_autostart(False)}
+
     # static UI — mounted last so /api/* always wins.
     static = _static_dir()
     if static is not None:

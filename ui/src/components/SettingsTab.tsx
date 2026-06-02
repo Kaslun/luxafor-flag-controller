@@ -6,10 +6,14 @@ export function SettingsTab({
   config,
   palette,
   onChange,
+  autostartEnabled,
+  onToggleAutostart,
 }: {
   config: Config;
   palette: PaletteSlot[];
   onChange: (next: Config) => void;
+  autostartEnabled: boolean;
+  onToggleAutostart: () => void;
 }) {
   const s = config.settings;
   const setS = (patch: Partial<Settings>) =>
@@ -89,6 +93,26 @@ export function SettingsTab({
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="set-group" style={{ marginTop: 18 }}>
+        <div className="set-row">
+          <div className="si">
+            <h3>Start with Windows</h3>
+            <p>
+              Launch Beacon automatically when you sign in, so your flag is always
+              under control. No admin rights needed.
+            </p>
+          </div>
+          <div className="set-ctl">
+            <div
+              className={"switch" + (autostartEnabled ? " on" : "")}
+              role="switch"
+              aria-checked={autostartEnabled}
+              onClick={onToggleAutostart}
+            />
           </div>
         </div>
       </div>

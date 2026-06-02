@@ -82,6 +82,12 @@ export default function App() {
       .then(refreshState)
       .catch((e) => setErr(String(e)));
 
+  const toggleAutostart = () =>
+    api
+      .setAutostart(!state.autostart_enabled)
+      .then(refreshState)
+      .catch((e) => setErr(String(e)));
+
   const recheck = () => {
     setRechecking(true);
     api
@@ -135,7 +141,13 @@ export default function App() {
           {tab === "routines" ? (
             <RoutinesTab config={config} palette={palette} onChange={commitConfig} />
           ) : (
-            <SettingsTab config={config} palette={palette} onChange={commitConfig} />
+            <SettingsTab
+              config={config}
+              palette={palette}
+              onChange={commitConfig}
+              autostartEnabled={state.autostart_enabled}
+              onToggleAutostart={toggleAutostart}
+            />
           )}
         </div>
       </div>

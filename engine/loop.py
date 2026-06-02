@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 
-from engine import conflict, updater
+from engine import autostart, conflict, updater
 from engine.config import Config, load_config, save_config
 from engine.device import Flag
 from engine.history import History
@@ -49,6 +49,7 @@ class BeaconEngine:
         self.history = History()
 
         self.state.device_connected = self.device.connected
+        self.state.autostart_enabled = autostart.is_enabled()
 
         self._loop: asyncio.AbstractEventLoop | None = None
         self._wake = asyncio.Event()
@@ -98,6 +99,12 @@ class BeaconEngine:
         self.config = cfg
         save_config(cfg)
         self.request_tick()
+
+    def set_autostart(self, enabled: bool) -> bool:
+        result = autostart.set_enabled(enabled)
+        with self.state.lock:
+            self.state.autostart_enabled = result
+        return result
 
     def recheck_conflict(self) -> dict | None:
         """Synchronous conflict re-check (for the UI 'Re-check' button)."""
