@@ -68,6 +68,42 @@ def v2_running() -> bool:
     return found
 
 
+_STARTUP_APPROVED = (
+    r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved"
+)
+
+
+def _disabled_flag(data) -> bool:
+    """Interpret a StartupApproved binary value: odd first byte == disabled.
+
+    0x02 = enabled, 0x03 = disabled (Windows toggles the low bit).
+    """
+    if isinstance(data, (bytes, bytearray)) and len(data) >= 1:
+        return (data[0] & 1) == 1
+    return False
+
+
+def _startup_disabled(leaf: str, value_name: str) -> bool:
+    """Has the user disabled this startup entry via Settings/Task Manager?
+
+    Disabling a startup app doesn't remove its Run value — Windows records
+    the state in StartupApproved\\{Run,StartupFolder} as a binary value whose
+    first byte is 0x02 (enabled) or 0x03 (disabled). Absent -> enabled.
+    """
+    if not _IS_WINDOWS:
+        return False
+    import winreg
+
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, _STARTUP_APPROVED + "\\" + leaf
+        ) as k:
+            data, _ = winreg.QueryValueEx(k, value_name)
+    except FileNotFoundError:
+        return False  # no record -> enabled by default
+    return _disabled_flag(data)
+
+
 def _startup_folder_has_luxafor() -> bool:
     appdata = os.environ.get("APPDATA")
     if not appdata:
@@ -84,7 +120,9 @@ def _startup_folder_has_luxafor() -> bool:
         return False
     try:
         for entry in startup.iterdir():
-            if "luxafor" in entry.name.lower():
+            if "luxafor" in entry.name.lower() and not _startup_disabled(
+                "StartupFolder", entry.name
+            ):
                 return True
     except OSError:
         return False
@@ -108,7 +146,10 @@ def _run_key_has_luxafor() -> bool:
                 i += 1
                 blob = f"{name} {value}".lower()
                 if "luxafor" in blob and "beacon" not in blob:
-                    return True
+                    # an entry that's been disabled in Startup settings is
+                    # not a real conflict — it won't relaunch
+                    if not _startup_disabled("Run", name):
+                        return True
     except FileNotFoundError:
         return False
     return False
