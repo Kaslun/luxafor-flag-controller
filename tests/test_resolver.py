@@ -3,15 +3,40 @@
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import dataclass
 
 import pytest
 
-from engine.config import Config, ConfigError, Settings, config_from_dict
+from engine.config import Config, ConfigError, Routine, Settings, config_from_dict
 from engine.resolver import active_routine, resolve
-from tests.conftest import FakeState, routine
 
 # A fixed Wednesday 10:00 (weekday()==2) for deterministic time-window tests.
 WED_10 = dt.datetime(2026, 6, 3, 10, 0)
+
+
+# Lightweight stand-in for the live engine State — the resolver only
+# duck-types these four attributes, so we don't need the real threaded State.
+# Kept local (not in conftest) so the test module has no cross-module import.
+@dataclass
+class FakeState:
+    paused: bool = False
+    device_connected: bool = True
+    in_call: bool = False
+    manual_override: dict | None = None
+
+
+def routine(**kw) -> Routine:
+    base = dict(
+        id="r",
+        name="R",
+        enabled=True,
+        days=[0, 1, 2, 3, 4, 5, 6],
+        start="09:00",
+        end="17:00",
+        color="available",
+    )
+    base.update(kw)
+    return Routine(**base)
 
 
 def cfg(routines=None, **settings):
