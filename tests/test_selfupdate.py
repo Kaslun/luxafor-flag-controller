@@ -1,0 +1,33 @@
+"""Self-update: swap-script generation and guard rails (no network/process)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from engine import selfupdate
+
+
+def test_swap_script_contains_pid_paths_and_relaunch():
+    s = selfupdate.build_swap_script(
+        1234, Path(r"C:\new\beacon-new.exe"), Path(r"C:\app\beacon.exe")
+    )
+    assert "PID eq 1234" in s          # waits for our process to exit
+    assert r"C:\new\beacon-new.exe" in s
+    assert r"C:\app\beacon.exe" in s
+    assert "--show" in s               # relaunch opens the dashboard
+    assert "move /Y" in s              # swaps the file
+    assert 'del "%~f0"' in s           # script removes itself
+
+
+def test_apply_refuses_when_not_frozen():
+    # tests run from source (not a PyInstaller bundle), so auto-update is off
+    with pytest.raises(RuntimeError, match="installed app"):
+        selfupdate.apply({"download_url": "http://x/beacon.exe", "version": "9.9.9"})
+
+
+def test_apply_requires_download_url(monkeypatch):
+    monkeypatch.setattr(selfupdate, "is_frozen", lambda: True)
+    with pytest.raises(RuntimeError, match="no update download"):
+        selfupdate.apply({"version": "9.9.9"})

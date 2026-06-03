@@ -52,6 +52,8 @@ export const api = {
 
   recheckConflict: () => send("POST", "/api/conflict/recheck"),
   recheckUpdate: () => send("POST", "/api/update/recheck"),
+  applyUpdate: () => send("POST", "/api/update/apply"),
+  openLogs: () => send("POST", "/api/logs/open"),
 
   setAutostart: (enabled: boolean) =>
     send(enabled ? "POST" : "DELETE", "/api/autostart"),

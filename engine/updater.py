@@ -52,7 +52,16 @@ def check() -> dict | None:
 
     try:
         if parse(remote) > parse(__version__):
-            return {"version": remote, "url": _RELEASES_URL}
+            info = {"version": remote, "url": _RELEASES_URL}
+            # pass through download URL + checksum for in-place auto-update,
+            # falling back to the conventional asset path if absent
+            info["download_url"] = data.get(
+                "download_url",
+                f"https://github.com/{_OWNER}/{_REPO}/releases/download/v{remote}/beacon.exe",
+            )
+            if data.get("sha256"):
+                info["sha256"] = str(data["sha256"])
+            return info
     except InvalidVersion as e:
         log.debug("update check: bad version string %r: %s", remote, e)
         return None

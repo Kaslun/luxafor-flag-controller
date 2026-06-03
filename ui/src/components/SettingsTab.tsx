@@ -13,6 +13,8 @@ export function SettingsTab({
   updateAvailable,
   checking,
   onCheckUpdate,
+  onInstallUpdate,
+  onOpenLogs,
 }: {
   config: Config;
   palette: PaletteSlot[];
@@ -23,7 +25,10 @@ export function SettingsTab({
   updateAvailable: UpdateAvailable | null;
   checking: boolean;
   onCheckUpdate: () => void;
+  onInstallUpdate: () => void;
+  onOpenLogs: () => void;
 }) {
+  const ISSUES_URL = "https://github.com/Kaslun/luxafor-flag-controller/issues";
   const s = config.settings;
   const setS = (patch: Partial<Settings>) =>
     onChange({ ...config, settings: { ...s, ...patch } });
@@ -140,15 +145,35 @@ export function SettingsTab({
           </div>
           <div className="set-ctl">
             {updateAvailable && (
-              <button
-                className="btn sm primary"
-                onClick={() => window.open(updateAvailable.url, "_blank", "noopener")}
-              >
-                Open download <Icon name="external" size={13} />
+              <button className="btn sm primary" onClick={onInstallUpdate}>
+                <Icon name="download" size={13} /> Install update
               </button>
             )}
             <button className="btn sm" onClick={onCheckUpdate} disabled={checking}>
               <Icon name="refresh" size={14} /> {checking ? "Checking…" : "Check for updates"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="set-group" style={{ marginTop: 18 }}>
+        <div className="set-row">
+          <div className="si">
+            <h3>Help &amp; diagnostics</h3>
+            <p>
+              Something off? Open the logs folder to grab <code>beacon.log</code>,
+              or file an issue so it can be fixed.
+            </p>
+          </div>
+          <div className="set-ctl">
+            <button className="btn sm" onClick={onOpenLogs}>
+              Open logs
+            </button>
+            <button
+              className="btn sm"
+              onClick={() => window.open(ISSUES_URL, "_blank", "noopener")}
+            >
+              Report an issue <Icon name="external" size={13} />
             </button>
           </div>
         </div>

@@ -23,8 +23,10 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import os
+import threading
 
-from engine import autostart, conflict, effects, updater
+from engine import autostart, conflict, effects, selfupdate, updater
 from engine.config import Config, load_config, save_config
 from engine.device import Flag
 from engine.history import History
@@ -128,6 +130,23 @@ class BeaconEngine:
         with self.state.lock:
             self.state.update_available = result
         return result
+
+    def apply_update(self) -> dict:
+        """Download + verify the update, launch the swap, then exit so the
+        new exe can replace this one and relaunch. Raises on failure."""
+        info = self.state.update_available
+        result = selfupdate.apply(info)  # raises if not frozen / no update / bad checksum
+        # give the HTTP response time to flush, then exit hard so the file
+        # unlocks for the swap script (which waits on our PID).
+        threading.Timer(1.0, self._exit_for_update).start()
+        return result
+
+    def _exit_for_update(self) -> None:
+        try:
+            self.device.close()
+        except Exception:
+            pass
+        os._exit(0)
 
     # ------------------------------------------------------------ resolve/write
 

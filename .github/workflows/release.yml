@@ -48,23 +48,6 @@ jobs:
         shell: bash
         run: pyinstaller packaging/beacon.spec --noconfirm --clean
 
-      - name: Stamp version.json
-        shell: bash
-        run: |
-          python - <<'PY'
-          import json
-          from engine.version import __version__
-          repo = "${{ github.repository }}"
-          manifest = {
-              "version": __version__,
-              "url": f"https://github.com/{repo}/releases",
-              "notes": "${{ github.ref_name }}",
-          }
-          with open("dist/version.json", "w", encoding="utf-8") as f:
-              json.dump(manifest, f, indent=2)
-          print("wrote dist/version.json", manifest)
-          PY
-
       - name: Verify version.json matches the tag
         shell: bash
         run: |
@@ -75,10 +58,41 @@ jobs:
             exit 1
           fi
 
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$ver" "packaging\beacon.iss"
+
+      - name: Stamp version.json (with download URLs + checksum)
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from engine.version import __version__
+          repo = "${{ github.repository }}"
+          tag = "${{ github.ref_name }}"
+          sha = hashlib.sha256(open("dist/beacon.exe", "rb").read()).hexdigest()
+          base = f"https://github.com/{repo}/releases/download/{tag}"
+          manifest = {
+              "version": __version__,
+              "url": f"https://github.com/{repo}/releases",
+              "download_url": f"{base}/beacon.exe",
+              "setup_url": f"{base}/beacon-setup.exe",
+              "sha256": sha,
+              "notes": tag,
+          }
+          with open("dist/version.json", "w", encoding="utf-8") as f:
+              json.dump(manifest, f, indent=2)
+          print("wrote dist/version.json", manifest)
+          PY
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/beacon.exe
+            dist/beacon-setup.exe
             dist/version.json
           generate_release_notes: true

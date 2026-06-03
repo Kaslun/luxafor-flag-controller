@@ -14,6 +14,7 @@ command methods.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 import webbrowser
@@ -24,10 +25,12 @@ from pystray import Menu, MenuItem
 
 from engine.logging_setup import get_logger
 from engine.palette import SELECTABLE, name_of, rgb_of
+from engine.paths import app_dir
 
 log = get_logger()
 
 _DEFAULT_OVERRIDE_MINUTES = 30
+ISSUES_URL = "https://github.com/Kaslun/luxafor-flag-controller/issues"
 
 
 def _rounded(draw: ImageDraw.ImageDraw, box, radius, fill):
@@ -156,6 +159,8 @@ class TrayController:
             ),
             Menu.SEPARATOR,
             MenuItem("Open Beacon…", self._open),
+            MenuItem("Open logs folder", self._open_logs),
+            MenuItem("Report an issue…", self._report_issue),
             MenuItem("Quit", self._quit),
         )
 
@@ -167,6 +172,15 @@ class TrayController:
     def _open(self, icon, item):
         port = self.engine.state.port or 54741
         webbrowser.open(f"http://127.0.0.1:{port}/")
+
+    def _open_logs(self, icon, item):
+        try:
+            os.startfile(str(app_dir()))  # noqa: S606 - Windows folder open
+        except Exception as e:  # pragma: no cover
+            log.debug("open logs failed: %s", e)
+
+    def _report_issue(self, icon, item):
+        webbrowser.open(ISSUES_URL)
 
     def _quit(self, icon, item):
         self._running = False

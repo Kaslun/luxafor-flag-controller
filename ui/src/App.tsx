@@ -6,6 +6,7 @@ import { useTheme } from "./theme";
 import type { Config, Effect, EffectsMeta, PaletteSlot, State } from "./types";
 import { Header } from "./components/Header";
 import { Hero } from "./components/Hero";
+import { Flag } from "./components/Flag";
 import { Tabs, type TabId } from "./components/Tabs";
 import { RoutinesTab } from "./components/RoutinesTab";
 import { SettingsTab } from "./components/SettingsTab";
@@ -27,6 +28,7 @@ export default function App() {
   const [rechecking, setRechecking] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const putTimer = useRef<number | null>(null);
@@ -119,6 +121,18 @@ export default function App() {
       .finally(() => setCheckingUpdate(false));
   };
 
+  const installUpdate = () => {
+    setApplying(true);
+    // On success the engine exits ~1s later to let the swap script replace
+    // the exe and relaunch (which opens a fresh window). Keep the overlay up.
+    api.applyUpdate().catch((e) => {
+      setApplying(false);
+      setErr(String(e));
+    });
+  };
+
+  const openLogs = () => api.openLogs().catch((e) => setErr(String(e)));
+
   return (
     <div
       data-theme={theme}
@@ -158,6 +172,7 @@ export default function App() {
           {state.update_available && !updateDismissed && (
             <UpdateBanner
               update={state.update_available}
+              onInstall={installUpdate}
               onDismiss={() => setUpdateDismissed(true)}
             />
           )}
@@ -186,10 +201,31 @@ export default function App() {
               updateAvailable={state.update_available}
               checking={checkingUpdate}
               onCheckUpdate={checkUpdate}
+              onInstallUpdate={installUpdate}
+              onOpenLogs={openLogs}
             />
           )}
         </div>
       </div>
+
+      {applying && (
+        <div className="scrim" style={{ zIndex: 80 }}>
+          <div className="popover" style={{ width: 380, textAlign: "center" }}>
+            <div className="pop-body" style={{ alignItems: "center" }}>
+              <div style={{ display: "grid", placeItems: "center", padding: "8px 0" }}>
+                <Flag hex={accent} size={72} />
+              </div>
+              <h3 style={{ margin: 0, font: "600 16px var(--font-display)" }}>
+                Updating Beacon…
+              </h3>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--text-2)" }}>
+                Downloading and installing the new version. Beacon will close and
+                reopen in a fresh window automatically — you can close this tab.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showOverride && (
         <OverridePopover

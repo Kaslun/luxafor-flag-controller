@@ -23,10 +23,13 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import os
+
 from engine.config import ConfigError, config_from_dict
 from engine.effects import as_payload as effects_payload
 from engine.logging_setup import get_logger
 from engine.palette import as_payload as palette_payload
+from engine.paths import app_dir
 from engine.version import __version__
 
 log = get_logger()
@@ -142,6 +145,27 @@ def create_app(engine) -> FastAPI:
     def post_update_recheck():
         # synchronous network check; runs in FastAPI's threadpool (def, not async)
         return {"update_available": engine.recheck_update()}
+
+    @app.post("/api/update/apply")
+    def post_update_apply():
+        # downloads + verifies, then the process exits ~1s later to let the
+        # swap script replace the exe and relaunch it
+        try:
+            return engine.apply_update()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.post("/api/logs/open")
+    def post_open_logs():
+        # opens the AppData folder (config + logs + history) for diagnostics
+        d = app_dir()
+        try:
+            os.startfile(str(d))  # type: ignore[attr-defined]  # Windows only
+        except AttributeError:
+            raise HTTPException(status_code=501, detail="not supported on this OS")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        return {"opened": str(d)}
 
     @app.post("/api/autostart")
     def post_autostart():

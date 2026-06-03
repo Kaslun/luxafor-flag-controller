@@ -3,23 +3,27 @@ import { Icon } from "../icons";
 
 export function UpdateBanner({
   update,
+  onInstall,
   onDismiss,
 }: {
   update: UpdateAvailable;
+  onInstall: () => void;
   onDismiss: () => void;
 }) {
   return (
     <div className="banner update">
       <Icon name="download" size={18} className="bi" />
       <div className="bx">
-        Beacon <b>{update.version}</b> is available. Updates install manually —
-        your flag keeps working.
+        Beacon <b>{update.version}</b> is available.
       </div>
+      <button className="btn sm primary" onClick={onInstall}>
+        <Icon name="download" size={13} /> Install update
+      </button>
       <button
         className="btn sm"
         onClick={() => window.open(update.url, "_blank", "noopener")}
       >
-        Open download <Icon name="external" size={13} />
+        Release notes <Icon name="external" size={13} />
       </button>
       <button className="btn sm icon ghost" onClick={onDismiss} aria-label="dismiss">
         <Icon name="x" size={14} />
