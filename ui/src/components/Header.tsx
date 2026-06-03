@@ -3,10 +3,12 @@ import { Icon } from "../icons";
 export function Header({
   accent,
   theme,
+  version,
   onToggleTheme,
 }: {
   accent: string;
   theme: "dark" | "light";
+  version: string;
   onToggleTheme: () => void;
 }) {
   return (
@@ -17,6 +19,9 @@ export function Header({
         </span>
         <span className="title">
           <b>Beacon</b>&nbsp; for Luxafor
+        </span>
+        <span className="mono" style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 4 }}>
+          v{version}
         </span>
       </div>
       <div className="spacer" />

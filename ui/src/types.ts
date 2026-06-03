@@ -56,6 +56,7 @@ export interface State {
   update_available: UpdateAvailable | null;
   conflict_detected: ConflictDetected | null;
   autostart_enabled: boolean;
+  version: string;
   updated_at: string;
 }
 

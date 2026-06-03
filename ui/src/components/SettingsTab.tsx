@@ -1,5 +1,6 @@
-import type { Config, PaletteSlot, Settings } from "../types";
+import type { Config, PaletteSlot, Settings, UpdateAvailable } from "../types";
 import { nameOf } from "../model";
+import { Icon } from "../icons";
 import { SlotMini } from "./SlotMini";
 
 export function SettingsTab({
@@ -8,12 +9,20 @@ export function SettingsTab({
   onChange,
   autostartEnabled,
   onToggleAutostart,
+  version,
+  updateAvailable,
+  checking,
+  onCheckUpdate,
 }: {
   config: Config;
   palette: PaletteSlot[];
   onChange: (next: Config) => void;
   autostartEnabled: boolean;
   onToggleAutostart: () => void;
+  version: string;
+  updateAvailable: UpdateAvailable | null;
+  checking: boolean;
+  onCheckUpdate: () => void;
 }) {
   const s = config.settings;
   const setS = (patch: Partial<Settings>) =>
@@ -113,6 +122,34 @@ export function SettingsTab({
               aria-checked={autostartEnabled}
               onClick={onToggleAutostart}
             />
+          </div>
+        </div>
+      </div>
+
+      <div className="set-group" style={{ marginTop: 18 }}>
+        <div className="set-row">
+          <div className="si">
+            <h3>Updates</h3>
+            <p>
+              You're running <b>Beacon v{version}</b>.{" "}
+              {updateAvailable
+                ? `Version ${updateAvailable.version} is available.`
+                : "You're up to date."}{" "}
+              Updates install manually — download and run the new file.
+            </p>
+          </div>
+          <div className="set-ctl">
+            {updateAvailable && (
+              <button
+                className="btn sm primary"
+                onClick={() => window.open(updateAvailable.url, "_blank", "noopener")}
+              >
+                Open download <Icon name="external" size={13} />
+              </button>
+            )}
+            <button className="btn sm" onClick={onCheckUpdate} disabled={checking}>
+              <Icon name="refresh" size={14} /> {checking ? "Checking…" : "Check for updates"}
+            </button>
           </div>
         </div>
       </div>

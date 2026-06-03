@@ -25,6 +25,7 @@ export default function App() {
   const [showOverride, setShowOverride] = useState(false);
   const [showConflict, setShowConflict] = useState(false);
   const [rechecking, setRechecking] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -108,6 +109,16 @@ export default function App() {
       .finally(() => setRechecking(false));
   };
 
+  const checkUpdate = () => {
+    setUpdateDismissed(false);
+    setCheckingUpdate(true);
+    api
+      .recheckUpdate()
+      .then(refreshState)
+      .catch((e) => setErr(String(e)))
+      .finally(() => setCheckingUpdate(false));
+  };
+
   return (
     <div
       data-theme={theme}
@@ -117,7 +128,12 @@ export default function App() {
         ["--accent-ink" as string]: accentInk,
       }}
     >
-      <Header accent={accent} theme={theme} onToggleTheme={toggleTheme} />
+      <Header
+        accent={accent}
+        theme={theme}
+        version={state.version}
+        onToggleTheme={toggleTheme}
+      />
 
       <div className="win-body">
         <Hero
@@ -166,6 +182,10 @@ export default function App() {
               onChange={commitConfig}
               autostartEnabled={state.autostart_enabled}
               onToggleAutostart={toggleAutostart}
+              version={state.version}
+              updateAvailable={state.update_available}
+              checking={checkingUpdate}
+              onCheckUpdate={checkUpdate}
             />
           )}
         </div>

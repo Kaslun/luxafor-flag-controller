@@ -51,6 +51,7 @@ export const api = {
   resume: () => send("DELETE", "/api/pause"),
 
   recheckConflict: () => send("POST", "/api/conflict/recheck"),
+  recheckUpdate: () => send("POST", "/api/update/recheck"),
 
   setAutostart: (enabled: boolean) =>
     send(enabled ? "POST" : "DELETE", "/api/autostart"),

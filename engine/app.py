@@ -138,6 +138,11 @@ def create_app(engine) -> FastAPI:
     def post_recheck():
         return {"conflict_detected": engine.recheck_conflict()}
 
+    @app.post("/api/update/recheck")
+    def post_update_recheck():
+        # synchronous network check; runs in FastAPI's threadpool (def, not async)
+        return {"update_available": engine.recheck_update()}
+
     @app.post("/api/autostart")
     def post_autostart():
         return {"autostart_enabled": engine.set_autostart(True)}

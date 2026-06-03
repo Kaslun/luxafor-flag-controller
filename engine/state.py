@@ -25,6 +25,8 @@ import datetime as dt
 import threading
 from dataclasses import dataclass, field
 
+from engine.version import __version__
+
 
 @dataclass
 class State:
@@ -45,6 +47,7 @@ class State:
     update_available: dict | None = None  # {version, url}
     conflict_detected: dict | None = None  # {luxafor_v2_running, luxafor_v2_startup}
     autostart_enabled: bool = False  # registered in the per-user Run key
+    version: str = __version__  # running engine version
     port: int = 0  # bound localhost port (for tray "Open Beacon")
 
     updated_at: dt.datetime = field(default_factory=dt.datetime.now)
@@ -73,5 +76,6 @@ class State:
                     dict(self.conflict_detected) if self.conflict_detected else None
                 ),
                 "autostart_enabled": self.autostart_enabled,
+                "version": self.version,
                 "updated_at": self.updated_at.isoformat(),
             }

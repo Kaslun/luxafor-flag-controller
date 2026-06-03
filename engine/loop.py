@@ -38,7 +38,10 @@ log = get_logger()
 
 TICK_SECONDS = 5
 CONFLICT_EVERY = 60  # seconds
-UPDATE_EVERY = 24 * 60 * 60  # seconds
+# Re-check for updates every 6h (plus on startup). The release manifest is a
+# static CDN asset with no rate limit, so frequent checks are cheap — this
+# keeps long-running instances from sitting on a stale version for a day.
+UPDATE_EVERY = 6 * 60 * 60  # seconds
 
 
 class BeaconEngine:
@@ -117,6 +120,13 @@ class BeaconEngine:
         result = conflict.detect()
         with self.state.lock:
             self.state.conflict_detected = result
+        return result
+
+    def recheck_update(self) -> dict | None:
+        """Synchronous update re-check (for the UI 'Check for updates' button)."""
+        result = updater.check()
+        with self.state.lock:
+            self.state.update_available = result
         return result
 
     # ------------------------------------------------------------ resolve/write
