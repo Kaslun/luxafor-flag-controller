@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from engine.config import ConfigError, config_from_dict
+from engine.effects import as_payload as effects_payload
 from engine.logging_setup import get_logger
 from engine.palette import as_payload as palette_payload
 from engine.version import __version__
@@ -36,6 +37,7 @@ log = get_logger()
 class OverrideBody(BaseModel):
     color: str
     duration_minutes: int | None = None
+    effect: dict | None = None
 
 
 class ConfigBody(BaseModel):
@@ -105,10 +107,14 @@ def create_app(engine) -> FastAPI:
     def get_palette():
         return palette_payload()
 
+    @app.get("/api/effects")
+    def get_effects():
+        return effects_payload()
+
     @app.post("/api/override")
     def post_override(body: OverrideBody):
         try:
-            ov = engine.set_override(body.color, body.duration_minutes)
+            ov = engine.set_override(body.color, body.duration_minutes, body.effect)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         return ov

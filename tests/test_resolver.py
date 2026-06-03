@@ -175,6 +175,86 @@ def test_config_rejects_bad_off_behavior():
         config_from_dict({"routines": [], "settings": {"off_behavior": "sparkle"}})
 
 
+def test_config_accepts_custom_hex_color():
+    cfg = config_from_dict(
+        {
+            "routines": [
+                {
+                    "id": "x",
+                    "name": "Custom",
+                    "enabled": True,
+                    "days": [0],
+                    "start": "09:00",
+                    "end": "10:00",
+                    "color": "#FF00AA",
+                    "effect": {"type": "strobe", "speed": 30},
+                }
+            ],
+            "settings": {},
+        }
+    )
+    r = cfg.routines[0]
+    assert r.color == "#FF00AA"
+    assert r.effect["type"] == "strobe"
+
+
+def test_config_rejects_bad_hex_color():
+    with pytest.raises(ConfigError):
+        config_from_dict(
+            {
+                "routines": [
+                    {
+                        "id": "x",
+                        "name": "x",
+                        "enabled": True,
+                        "days": [0],
+                        "start": "09:00",
+                        "end": "10:00",
+                        "color": "#ZZZ",
+                    }
+                ],
+                "settings": {},
+            }
+        )
+
+
+def test_config_rejects_bad_effect():
+    with pytest.raises(ConfigError):
+        config_from_dict(
+            {
+                "routines": [
+                    {
+                        "id": "x",
+                        "name": "x",
+                        "enabled": True,
+                        "days": [0],
+                        "start": "09:00",
+                        "end": "10:00",
+                        "color": "focus",
+                        "effect": {"type": "disco"},
+                    }
+                ],
+                "settings": {},
+            }
+        )
+
+
+def test_resolver_carries_routine_effect():
+    r = routine(start="09:00", end="11:00", color="#112233")
+    r.effect = {"type": "wave", "speed": 20, "wave_type": 2, "pattern_id": 1}
+    res = resolve(WED_10, FakeState(), cfg(routines=[r]))
+    assert res.color == "#112233"
+    assert res.effect["type"] == "wave"
+
+
+def test_resolver_carries_override_effect():
+    ov = {"color": "#00FF00", "expiry": None, "effect": {"type": "strobe", "speed": 10}}
+    res = resolve(WED_10, FakeState(manual_override=ov), cfg())
+    assert res.kind == "override"
+    assert res.color == "#00FF00"
+    assert res.effect["type"] == "strobe"
+
+
 def test_config_roundtrip_defaults():
     from engine.config import default_config
 

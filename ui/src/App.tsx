@@ -3,7 +3,7 @@ import { api } from "./api";
 import { usePolling } from "./hooks/usePolling";
 import { accentFor, inkFor } from "./model";
 import { useTheme } from "./theme";
-import type { Config, PaletteSlot, State } from "./types";
+import type { Config, Effect, EffectsMeta, PaletteSlot, State } from "./types";
 import { Header } from "./components/Header";
 import { Hero } from "./components/Hero";
 import { Tabs, type TabId } from "./components/Tabs";
@@ -18,6 +18,7 @@ export default function App() {
   const { data: state, refresh: refreshState } = usePolling<State>(api.getState, 3000);
 
   const [palette, setPalette] = useState<PaletteSlot[]>([]);
+  const [effects, setEffects] = useState<EffectsMeta | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
 
   const [tab, setTab] = useState<TabId>("routines");
@@ -33,6 +34,7 @@ export default function App() {
   // one-time loads
   useEffect(() => {
     api.getPalette().then(setPalette).catch((e) => setErr(String(e)));
+    api.getEffects().then(setEffects).catch((e) => setErr(String(e)));
     api.getConfig().then(setConfig).catch((e) => setErr(String(e)));
   }, []);
 
@@ -54,7 +56,7 @@ export default function App() {
     }, 400);
   };
 
-  if (!state || !config || palette.length === 0) {
+  if (!state || !config || palette.length === 0 || !effects) {
     return (
       <div data-theme={theme} className="app" style={{ placeItems: "center", display: "grid" }}>
         <div className="muted">Connecting to Beacon…</div>
@@ -73,8 +75,15 @@ export default function App() {
     luxafor_v2_startup: false,
   };
 
-  const setOverride = (color: string, durationMinutes: number | null) => {
-    api.setOverride(color, durationMinutes).then(refreshState).catch((e) => setErr(String(e)));
+  const setOverride = (
+    color: string,
+    durationMinutes: number | null,
+    effect: Effect
+  ) => {
+    api
+      .setOverride(color, durationMinutes, effect)
+      .then(refreshState)
+      .catch((e) => setErr(String(e)));
     setShowOverride(false);
   };
   const clearOverride = () =>
@@ -144,7 +153,12 @@ export default function App() {
           )}
 
           {tab === "routines" ? (
-            <RoutinesTab config={config} palette={palette} onChange={commitConfig} />
+            <RoutinesTab
+              config={config}
+              palette={palette}
+              effects={effects}
+              onChange={commitConfig}
+            />
           ) : (
             <SettingsTab
               config={config}
@@ -160,6 +174,7 @@ export default function App() {
       {showOverride && (
         <OverridePopover
           palette={palette}
+          effects={effects}
           current={state.manual_override}
           onSet={setOverride}
           onClose={() => setShowOverride(false)}

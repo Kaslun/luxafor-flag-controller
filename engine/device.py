@@ -51,18 +51,16 @@ class Flag:
             log.debug("Flag open failed: %s: %s", type(e).__name__, e)
             return False
 
-    def set(self, rgb: tuple[int, int, int]) -> bool:
-        """Write an RGB color. Reopens transparently if the handle died.
+    def write(self, report: list[int]) -> bool:
+        """Write a raw 8-byte HID report (twice). Reopens if the handle died.
 
         Returns True if the write landed, False if the device is
-        unavailable. Always writes (twice) when connected — the loop owns
-        change/heartbeat logic.
+        unavailable. Always writes when connected — the loop owns
+        change/heartbeat logic. The report is built by ``engine.effects``;
+        for a plain color it's the validated static-color command.
         """
         if self._dev is None and not self._open():
             return False
-
-        r, g, b = rgb
-        report = [0x00, 0x01, 0xFF, int(r), int(g), int(b), 0x00, 0x00]
         try:
             self._dev.write(report)
             self._dev.write(report)  # guard against first-write drop
@@ -73,6 +71,11 @@ class Flag:
             self._close_handle()
             self.connected = False
             return False
+
+    def set(self, rgb: tuple[int, int, int]) -> bool:
+        """Convenience: write a solid color (the validated static command)."""
+        r, g, b = rgb
+        return self.write([0x00, 0x01, 0xFF, int(r), int(g), int(b), 0x00, 0x00])
 
     def off(self) -> bool:
         return self.set((0, 0, 0))

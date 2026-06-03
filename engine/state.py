@@ -29,10 +29,11 @@ from dataclasses import dataclass, field
 @dataclass
 class State:
     # resolved output (updated each tick)
-    color: str = "off"  # palette slot name
+    color: str = "off"  # palette slot name or "#RRGGBB" custom color
     routine: str = "off"  # winning source
     kind: str = "off"  # rendering bucket
     reason: str = ""
+    effect: dict | None = None  # resolved effect (None = solid)
 
     # control flags / inputs
     paused: bool = False
@@ -58,6 +59,7 @@ class State:
                 "routine": self.routine,
                 "kind": self.kind,
                 "reason": self.reason,
+                "effect": dict(self.effect) if self.effect else None,
                 "paused": self.paused,
                 "in_call": self.in_call,
                 "device_connected": self.device_connected,

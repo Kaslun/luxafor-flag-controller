@@ -24,7 +24,11 @@ visible color.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+
+# A color value is either a known slot name or a custom "#RRGGBB" hex.
+_HEX_RE = re.compile(r"^#?[0-9A-Fa-f]{6}$")
 
 
 @dataclass(frozen=True)
@@ -76,15 +80,44 @@ def is_slot(name: str) -> bool:
     return name in SLOTS
 
 
+def is_hex(value: str) -> bool:
+    return isinstance(value, str) and bool(_HEX_RE.match(value))
+
+
+def is_color(value: str) -> bool:
+    """True for a known slot name or a valid #RRGGBB custom color."""
+    return is_slot(value) or is_hex(value)
+
+
+def _parse_hex(value: str) -> tuple[int, int, int]:
+    h = value.lstrip("#")
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
 def rgb_of(slot: str) -> tuple[int, int, int]:
-    """LED-tuned RGB written to the flag; unknown slots fall back to black."""
+    """LED-tuned RGB for a known slot; unknown slots fall back to black."""
     s = SLOTS.get(slot)
     return s.led_rgb if s else (0, 0, 0)
 
 
+def resolve_rgb(color: str) -> tuple[int, int, int]:
+    """RGB to write for any color value.
+
+    Named slots use their LED-tuned value; a custom ``#RRGGBB`` is honored
+    exactly as the user chose it.
+    """
+    if color in SLOTS:
+        return SLOTS[color].led_rgb
+    if is_hex(color):
+        return _parse_hex(color)
+    return (0, 0, 0)
+
+
 def name_of(slot: str) -> str:
     s = SLOTS.get(slot)
-    return s.name if s else slot
+    if s:
+        return s.name
+    return "Custom" if is_hex(slot) else slot
 
 
 def dim_rgb(rgb: tuple[int, int, int], factor: float = 0.15) -> tuple[int, int, int]:

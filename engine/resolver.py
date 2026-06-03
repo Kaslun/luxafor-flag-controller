@@ -36,11 +36,12 @@ from engine.palette import name_of
 @dataclass
 class ResolvedStatus:
     routine: str  # winning source id
-    color: str  # palette slot name
+    color: str  # palette slot name or "#RRGGBB" custom color
     reason: str  # human-readable explanation
     kind: str  # rendering bucket (see module docstring)
     off: bool = False  # LEDs should be dark
     dim: bool = False  # available color, reduced brightness
+    effect: dict | None = None  # None = solid; see engine.effects
 
 
 def _to_min(hhmm: str) -> int:
@@ -125,7 +126,7 @@ def resolve(now: dt.datetime, state, config: Config) -> ResolvedStatus:
         expiry = ov.get("expiry")
         return ResolvedStatus(
             "override", color, _format_override_reason(color, expiry, now),
-            kind="override",
+            kind="override", effect=ov.get("effect"),
         )
 
     # 5. active scheduled routine
@@ -134,7 +135,7 @@ def resolve(now: dt.datetime, state, config: Config) -> ResolvedStatus:
         return ResolvedStatus(
             "routine", r.color,
             f"{r.name} ({_fmt12(r.start)}–{_fmt12(r.end)}).",
-            kind="routine",
+            kind="routine", effect=getattr(r, "effect", None),
         )
 
     # 6. floor — depends on off_behavior

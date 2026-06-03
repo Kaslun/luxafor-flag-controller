@@ -10,9 +10,27 @@ export type Kind =
   | "off"
   | "dim";
 
+export interface Effect {
+  type: string; // "solid" | "fade" | "strobe" | "wave" | "pattern"
+  speed: number;
+  wave_type: number;
+  pattern_id: number;
+}
+
 export interface ManualOverride {
   color: string;
   expiry: string | null; // ISO timestamp, or null = until cleared
+  effect?: Effect | null;
+}
+
+export interface EffectsMeta {
+  types: string[];
+  wave_types: { id: number; name: string }[];
+  pattern_ids: { id: number; name: string }[];
+  speed_min: number;
+  speed_max: number;
+  default: Effect;
+  color_ignored_types: string[];
 }
 
 export interface UpdateAvailable {
@@ -30,6 +48,7 @@ export interface State {
   routine: string;
   kind: Kind;
   reason: string;
+  effect: Effect | null;
   paused: boolean;
   in_call: boolean;
   device_connected: boolean;
@@ -47,7 +66,8 @@ export interface Routine {
   days: number[]; // Mon=0 .. Sun=6
   start: string; // "HH:MM"
   end: string; // "HH:MM"
-  color: string; // palette slot
+  color: string; // palette slot name or "#RRGGBB"
+  effect?: Effect;
 }
 
 export interface Settings {

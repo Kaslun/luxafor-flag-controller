@@ -8,19 +8,31 @@ export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const FALLBACK_HEX = "#3A3A42";
 
-export function hexOf(palette: PaletteSlot[], slot: string): string {
-  const p = palette.find((s) => s.slot === slot);
+export function isHex(color: string): boolean {
+  return /^#?[0-9A-Fa-f]{6}$/.test(color || "");
+}
+
+function normHex(color: string): string {
+  return color.startsWith("#") ? color : "#" + color;
+}
+
+/** Resolve a color value (slot name or "#RRGGBB") to a display hex. */
+export function hexOf(palette: PaletteSlot[], color: string): string {
+  if (isHex(color)) return normHex(color);
+  const p = palette.find((s) => s.slot === color);
   if (!p) return FALLBACK_HEX;
   return p.off ? FALLBACK_HEX : p.hex;
 }
 
-export function nameOf(palette: PaletteSlot[], slot: string): string {
-  const p = palette.find((s) => s.slot === slot);
-  return p ? p.name : slot;
+export function nameOf(palette: PaletteSlot[], color: string): string {
+  if (isHex(color)) return "Custom";
+  const p = palette.find((s) => s.slot === color);
+  return p ? p.name : color;
 }
 
-export function isOff(palette: PaletteSlot[], slot: string): boolean {
-  const p = palette.find((s) => s.slot === slot);
+export function isOff(palette: PaletteSlot[], color: string): boolean {
+  if (isHex(color)) return false;
+  const p = palette.find((s) => s.slot === color);
   return p ? p.off : false;
 }
 

@@ -24,13 +24,13 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 
-from engine import autostart, conflict, updater
+from engine import autostart, conflict, effects, updater
 from engine.config import Config, load_config, save_config
 from engine.device import Flag
 from engine.history import History
 from engine.logging_setup import get_logger
 from engine.mic import mic_in_use
-from engine.palette import dim_rgb, is_slot, rgb_of
+from engine.palette import dim_rgb, is_color, resolve_rgb
 from engine.resolver import ResolvedStatus, resolve
 from engine.state import State
 
@@ -56,7 +56,7 @@ class BeaconEngine:
         self._stop = asyncio.Event()
 
         # write bookkeeping
-        self._last_rgb: tuple[int, int, int] | None = None
+        self._last_report: list[int] | None = None
         self._last_write_at: dt.datetime | None = None
 
         # history bookkeeping
@@ -69,9 +69,15 @@ class BeaconEngine:
         if self._loop is not None:
             self._loop.call_soon_threadsafe(self._wake.set)
 
-    def set_override(self, color: str, duration_minutes: int | None) -> dict:
-        if not is_slot(color) or color == "off":
+    def set_override(
+        self, color: str, duration_minutes: int | None, effect: dict | None = None
+    ) -> dict:
+        if not is_color(color) or color == "off":
             raise ValueError(f"invalid override color {color!r}")
+        try:
+            norm_effect = effects.normalize_effect(effect)
+        except effects.EffectError as e:
+            raise ValueError(str(e))
         expiry = None
         if duration_minutes is not None:
             if duration_minutes <= 0:
@@ -79,7 +85,7 @@ class BeaconEngine:
             expiry = (
                 dt.datetime.now() + dt.timedelta(minutes=duration_minutes)
             ).isoformat()
-        ov = {"color": color, "expiry": expiry}
+        ov = {"color": color, "expiry": expiry, "effect": norm_effect}
         with self.state.lock:
             self.state.manual_override = ov
         self.request_tick()
@@ -115,12 +121,17 @@ class BeaconEngine:
 
     # ------------------------------------------------------------ resolve/write
 
-    def _target_rgb(self, resolved: ResolvedStatus) -> tuple[int, int, int]:
+    def _target_report(self, resolved: ResolvedStatus) -> list[int]:
+        """The 8-byte HID report for the resolved status.
+
+        off/paused/disconnected -> solid black; dim -> solid dimmed
+        available color; otherwise the color's RGB with its effect applied.
+        """
         if resolved.off:
-            return (0, 0, 0)
+            return effects.build_report((0, 0, 0), None)
         if resolved.dim:
-            return dim_rgb(rgb_of(resolved.color))
-        return rgb_of(resolved.color)
+            return effects.build_report(dim_rgb(resolve_rgb(resolved.color)), None)
+        return effects.build_report(resolve_rgb(resolved.color), resolved.effect)
 
     def _apply_resolved(self, resolved: ResolvedStatus, now: dt.datetime) -> None:
         with self.state.lock:
@@ -128,6 +139,7 @@ class BeaconEngine:
             self.state.routine = resolved.routine
             self.state.kind = resolved.kind
             self.state.reason = resolved.reason
+            self.state.effect = resolved.effect
             self.state.updated_at = now
 
     def tick(self) -> None:
@@ -154,16 +166,22 @@ class BeaconEngine:
 
         # 4. realize on the device
         if not self.state.paused:
-            target = self._target_rgb(resolved)
-            changed = target != self._last_rgb
+            report = self._target_report(resolved)
+            changed = report != self._last_report
+            # Heartbeat re-asserts only solid colors. Animated effects are
+            # device-side; re-sending would visibly restart them, so we
+            # write those once on change only.
             heartbeat_due = (
-                self._last_write_at is None
-                or (now - self._last_write_at).total_seconds()
-                >= self.config.settings.heartbeat_interval_seconds
+                effects.is_solid(resolved.effect)
+                and (
+                    self._last_write_at is None
+                    or (now - self._last_write_at).total_seconds()
+                    >= self.config.settings.heartbeat_interval_seconds
+                )
             )
             if changed or heartbeat_due:
-                self.device.set(target)
-                self._last_rgb = target
+                self.device.write(report)
+                self._last_report = report
                 self._last_write_at = now
                 # the write tells us the true connection state; if it
                 # flipped, re-resolve so the UI reflects it this tick

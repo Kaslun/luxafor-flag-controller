@@ -17,9 +17,10 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from engine.effects import EffectError, normalize_effect
 from engine.logging_setup import get_logger
 from engine.paths import config_path
-from engine.palette import is_slot
+from engine.palette import is_color
 
 log = get_logger()
 
@@ -36,7 +37,8 @@ class Routine:
     days: list[int]  # weekday indices, Mon=0 .. Sun=6
     start: str  # "HH:MM"
     end: str  # "HH:MM"
-    color: str  # palette slot name
+    color: str  # palette slot name or "#RRGGBB" custom color
+    effect: dict = field(default_factory=lambda: {"type": "solid"})
 
 
 @dataclass
@@ -102,9 +104,13 @@ def _routine_from_dict(d: dict) -> Routine:
         raise ConfigError(f"routine {rid!r}: days must be 0..6, got {days}")
     if _parse_hhmm(start, "start") >= _parse_hhmm(end, "end"):
         raise ConfigError(f"routine {rid!r}: start must be before end (no midnight span)")
-    if not is_slot(color):
-        raise ConfigError(f"routine {rid!r}: unknown color slot {color!r}")
-    return Routine(rid, name, enabled, days, start, end, color)
+    if not is_color(color):
+        raise ConfigError(f"routine {rid!r}: invalid color {color!r} (slot name or #RRGGBB)")
+    try:
+        effect = normalize_effect(d.get("effect"))
+    except EffectError as e:
+        raise ConfigError(f"routine {rid!r}: {e}")
+    return Routine(rid, name, enabled, days, start, end, color, effect)
 
 
 def _settings_from_dict(d: dict) -> Settings:
@@ -119,12 +125,12 @@ def _settings_from_dict(d: dict) -> Settings:
         d.get("heartbeat_interval_seconds", s.heartbeat_interval_seconds)
     )
 
-    if not is_slot(s.call_color):
-        raise ConfigError(f"unknown call_color slot {s.call_color!r}")
-    if not is_slot(s.available_color):
-        raise ConfigError(f"unknown available_color slot {s.available_color!r}")
-    # off_behavior is "off", "dim", or any known slot name.
-    if s.off_behavior not in ("off", "dim") and not is_slot(s.off_behavior):
+    if not is_color(s.call_color):
+        raise ConfigError(f"invalid call_color {s.call_color!r}")
+    if not is_color(s.available_color):
+        raise ConfigError(f"invalid available_color {s.available_color!r}")
+    # off_behavior is "off", "dim", or any color (slot name or #RRGGBB).
+    if s.off_behavior not in ("off", "dim") and not is_color(s.off_behavior):
         raise ConfigError(f"invalid off_behavior {s.off_behavior!r}")
     if s.heartbeat_interval_seconds < 5:
         raise ConfigError("heartbeat_interval_seconds must be >= 5")

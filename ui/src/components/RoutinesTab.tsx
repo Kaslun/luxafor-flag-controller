@@ -1,15 +1,17 @@
 import { useState } from "react";
-import type { Config, PaletteSlot, Routine } from "../types";
+import type { Config, EffectsMeta, PaletteSlot, Routine } from "../types";
 import { Icon } from "../icons";
 import { RoutineRow } from "./RoutineRow";
 
 export function RoutinesTab({
   config,
   palette,
+  effects,
   onChange,
 }: {
   config: Config;
   palette: PaletteSlot[];
+  effects: EffectsMeta;
   onChange: (next: Config) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -78,6 +80,7 @@ export function RoutinesTab({
               key={r.id}
               routine={r}
               palette={palette}
+              effects={effects}
               open={openId === r.id}
               onOpen={() => setOpenId(openId === r.id ? null : r.id)}
               onChange={changeRoutine}
