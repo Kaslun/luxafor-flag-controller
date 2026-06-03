@@ -36,11 +36,13 @@ export default function App() {
     api.getConfig().then(setConfig).catch((e) => setErr(String(e)));
   }, []);
 
-  // auto-open the conflict sheet when a conflict first appears
+  // Auto-open the conflict sheet only when Luxafor is actively *running*
+  // (live flicker, urgent). For a startup-only entry the dismissible banner
+  // is enough — no need to nag with a modal on every launch.
   useEffect(() => {
-    const active = state?.conflict_detected != null;
-    if (active && !prevConflict.current) setShowConflict(true);
-    prevConflict.current = active;
+    const running = state?.conflict_detected?.luxafor_v2_running === true;
+    if (running && !prevConflict.current) setShowConflict(true);
+    prevConflict.current = running;
   }, [state?.conflict_detected]);
 
   // debounced config PUT
@@ -135,7 +137,10 @@ export default function App() {
             />
           )}
           {conflictActive && !showConflict && (
-            <ConflictBanner onFix={() => setShowConflict(true)} />
+            <ConflictBanner
+              conflict={state.conflict_detected!}
+              onFix={() => setShowConflict(true)}
+            />
           )}
 
           {tab === "routines" ? (

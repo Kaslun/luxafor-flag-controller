@@ -1,4 +1,4 @@
-import type { UpdateAvailable } from "../types";
+import type { ConflictDetected, UpdateAvailable } from "../types";
 import { Icon } from "../icons";
 
 export function UpdateBanner({
@@ -28,13 +28,20 @@ export function UpdateBanner({
   );
 }
 
-export function ConflictBanner({ onFix }: { onFix: () => void }) {
+export function ConflictBanner({
+  conflict,
+  onFix,
+}: {
+  conflict: ConflictDetected;
+  onFix: () => void;
+}) {
+  const message = conflict.luxafor_v2_running
+    ? "The old Luxafor app is running and may fight Beacon for the flag."
+    : "The old Luxafor app is set to launch at startup — it'll fight Beacon for the flag next time it runs.";
   return (
     <div className="banner warn">
       <Icon name="alert" size={18} className="bi" />
-      <div className="bx">
-        The old Luxafor app is still running and the flag may flicker.
-      </div>
+      <div className="bx">{message}</div>
       <button className="btn sm" onClick={onFix}>
         Fix it
       </button>

@@ -17,6 +17,23 @@ export function ConflictSheet({
   const startup = conflict.luxafor_v2_startup;
   const allClear = !running && !startup;
 
+  let heading: string;
+  let body: string;
+  if (allClear) {
+    heading = "All set — Beacon has the flag";
+    body =
+      "The old Luxafor app is no longer running or launching at startup. Beacon now drives the flag on its own.";
+  } else if (running) {
+    heading = "Two apps are fighting over your flag";
+    body =
+      "The original Luxafor app is running. While it is, both apps send colors to the flag and it flickers between them. Quit it and remove it from startup so Beacon can take over cleanly.";
+  } else {
+    // startup only — not running right now
+    heading = "The old Luxafor app will fight for your flag";
+    body =
+      "The original Luxafor app isn't running now, but it's set to launch when you sign in. Once it does, both apps send colors to the flag and it flickers. Remove it from startup so that doesn't happen.";
+  }
+
   return (
     <div className="scrim">
       <div className="sheet">
@@ -25,20 +42,12 @@ export function ConflictSheet({
             <Icon name="alert" size={24} />
           </div>
           <div>
-            <h2>
-              {allClear
-                ? "All set — Beacon has the flag"
-                : "Two apps are fighting over your flag"}
-            </h2>
-            <p>
-              {allClear
-                ? "The old Luxafor app is no longer running or launching at startup. Beacon now drives the flag on its own."
-                : "The original Luxafor app is still running. While it is, both apps send colors to the flag and it flickers between them. Quit it and remove it from startup so Beacon can take over cleanly."}
-            </p>
+            <h2>{heading}</h2>
+            <p>{body}</p>
           </div>
         </div>
         <div className="sheet-body">
-          {!allClear && (
+          {running && (
             <div className="symptom">
               <div className="blink">
                 <Flag hex="#FF3B3B" size={40} blink />
@@ -84,7 +93,9 @@ export function ConflictSheet({
           <span style={{ fontSize: 12.5, color: "var(--text-2)" }}>
             {allClear
               ? "You're good to go."
-              : "Beacon keeps working meanwhile — colors may just flicker."}
+              : running
+              ? "Beacon keeps working meanwhile — colors may just flicker."
+              : "Beacon has the flag now — this just prevents trouble at next sign-in."}
           </span>
           <div style={{ display: "flex", gap: 10 }}>
             {!allClear && (
