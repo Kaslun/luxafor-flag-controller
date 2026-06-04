@@ -25,6 +25,7 @@ import asyncio
 import datetime as dt
 import os
 import threading
+import time
 
 from engine import autostart, conflict, effects, selfupdate, session, updater
 from engine.config import Config, load_config, save_config
@@ -227,6 +228,15 @@ class BeaconEngine:
                 )
             )
             if changed or heartbeat_due:
+                # Leaving a built-in pattern? A static write alone won't stop
+                # it (the firmware resumes the animation), so send an explicit
+                # pattern-off first. ``_last_report is None`` covers startup,
+                # where the device may still be mid-pattern from a prior run.
+                target_is_pattern = effects.report_is_pattern(report)
+                was_pattern = effects.report_is_pattern(self._last_report)
+                if not target_is_pattern and (was_pattern or self._last_report is None):
+                    self.device.write(effects.PATTERN_OFF_REPORT)
+                    time.sleep(0.06)  # let the firmware settle before the color
                 self.device.write(report)
                 self._last_report = report
                 self._last_write_at = now

@@ -102,6 +102,18 @@ def is_solid(effect: dict | None) -> bool:
     return effect is None or effect.get("type", "solid") == "solid"
 
 
+# A running built-in pattern (command 0x06) is NOT stopped by a static-color
+# write — it flashes the color then the firmware resumes the animation.
+# Sending the pattern command with id 0 stops it (verified on the device).
+PATTERN_CMD = 0x06
+PATTERN_OFF_REPORT = [0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+
+def report_is_pattern(report: list[int] | None) -> bool:
+    """True if a built-in pattern animation is running for this report."""
+    return bool(report) and len(report) > 2 and report[1] == PATTERN_CMD and report[2] != 0
+
+
 def ignores_color(effect: dict | None) -> bool:
     return bool(effect) and effect.get("type") in COLOR_IGNORED_TYPES
 
