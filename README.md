@@ -1,9 +1,10 @@
 # Beacon — Luxafor Flag 2 status bridge
 
-Beacon drives a Luxafor Flag 2 desk light from local signals — automatic
-call detection (mic capture), scheduled routines, and manual override —
-so the flag reflects your real status. Local-only, per-user, single
-machine. No cloud, no server, no admin rights.
+Beacon drives a Luxafor Flag 2 desk light from local signals — custom
+event triggers (mic in a call, a specific app on the mic, webcam in use,
+screen locked), scheduled routines, and manual override — so the flag
+reflects your real status. Local-only, per-user, single machine. No
+cloud, no server, no admin rights.
 
 One bundled exe: headless engine + a localhost web UI + a tray icon, in
 a single process.
@@ -96,8 +97,9 @@ to `main`.
 
 - Device layer is raw `hidapi`. The validated write report is 8 bytes
   `[0x00, 0x01, 0xFF, R, G, B, 0x00, 0x00]`, written twice.
-- Call detection reads the Windows consent-store mic-capture registry,
-  not audio volume.
+- Mic/webcam triggers read the Windows consent-store capture registry,
+  not audio/video volume. Each trigger carries a priority; the highest
+  active one wins, beating a manual override only above priority 50.
 - The localhost API has no auth in v1 — loopback-only, single user, by
   design.
 - Updates are manual-replace via GitHub releases; Beacon never
