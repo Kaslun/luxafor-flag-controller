@@ -25,7 +25,8 @@ from pydantic import BaseModel
 
 import os
 
-from engine.config import ConfigError, config_from_dict
+from engine import mic, webcam
+from engine.config import ConfigError, config_from_dict, triggers_meta
 from engine.effects import as_payload as effects_payload
 from engine.logging_setup import get_logger
 from engine.palette import as_payload as palette_payload
@@ -50,6 +51,7 @@ class PreviewBody(BaseModel):
 
 class ConfigBody(BaseModel):
     routines: list[dict] = []
+    triggers: list[dict] = []
     settings: dict = {}
 
 
@@ -140,6 +142,23 @@ def create_app(engine) -> FastAPI:
     @app.get("/api/effects")
     def get_effects():
         return effects_payload()
+
+    @app.get("/api/triggers/meta")
+    def get_triggers_meta():
+        return triggers_meta()
+
+    @app.get("/api/signals")
+    def get_signals():
+        # currently-detected capturers, so the mic_app editor can offer a
+        # live "detected now" picker instead of blind typing
+        try:
+            return {
+                "mic_capturers": mic.mic_capturers(),
+                "webcam_capturers": webcam.webcam_capturers(),
+            }
+        except Exception as e:  # pragma: no cover - defensive
+            log.debug("signals read failed: %s", e)
+            return {"mic_capturers": [], "webcam_capturers": []}
 
     @app.post("/api/override")
     def post_override(body: OverrideBody):

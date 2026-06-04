@@ -3,7 +3,8 @@
 export type Kind =
   | "paused"
   | "disconnected"
-  | "call"
+  | "preview"
+  | "trigger"
   | "override"
   | "routine"
   | "available"
@@ -43,6 +44,43 @@ export interface ConflictDetected {
   luxafor_v2_startup: boolean;
 }
 
+export type TriggerType = "mic" | "mic_app" | "webcam" | "lock";
+
+export interface Trigger {
+  id: string;
+  name: string;
+  enabled: boolean;
+  type: TriggerType;
+  color: string; // slot name or "#RRGGBB"
+  priority: number; // 0..100, higher wins; 50 == manual override
+  params: { app?: string };
+  effect?: Effect;
+}
+
+export interface ActiveTrigger {
+  id: string;
+  name: string;
+  type: TriggerType;
+  color: string;
+  priority: number;
+  effect?: Effect;
+}
+
+export interface TriggerMeta {
+  types: { id: TriggerType; name: string; needs_app: boolean }[];
+  priority_min: number;
+  priority_max: number;
+  override_priority: number;
+}
+
+export interface Signals {
+  mic?: boolean;
+  webcam?: boolean;
+  lock?: boolean;
+  mic_capturers?: string[];
+  webcam_capturers?: string[];
+}
+
 export interface State {
   color: string;
   routine: string;
@@ -52,6 +90,8 @@ export interface State {
   paused: boolean;
   in_call: boolean;
   locked: boolean;
+  signals: Signals;
+  active_triggers: ActiveTrigger[];
   device_connected: boolean;
   manual_override: ManualOverride | null;
   update_available: UpdateAvailable | null;
@@ -73,10 +113,6 @@ export interface Routine {
 }
 
 export interface Settings {
-  call_detection: boolean;
-  call_color: string;
-  lock_detection: boolean;
-  lock_color: string;
   available_color: string;
   off_behavior: string; // "off" | "dim" | <slot>
   heartbeat_interval_seconds: number;
@@ -84,6 +120,7 @@ export interface Settings {
 
 export interface Config {
   routines: Routine[];
+  triggers: Trigger[];
   settings: Settings;
 }
 

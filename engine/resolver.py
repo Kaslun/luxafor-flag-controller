@@ -11,19 +11,21 @@ Priority ladder (highest first), matching the Beacon design's
   1. paused        — engine writes nothing
   2. disconnected  — no working HID handle
   3. preview       — live color preview while the user is picking
-  4. call          — mic capture detected (when call_detection on)
-  5. locked        — screen locked (when lock_detection on)
-  6. override       — manual override, not expired
-  7. routine       — a matching enabled scheduled block (later start wins)
-  8. floor          — off / dim / available, per settings.off_behavior
+  4. triggers + override — the unified event band (see below)
+  5. routine       — a matching enabled scheduled block (later start wins)
+  6. floor          — off / dim / available, per settings.off_behavior
 
-A real call (3) outranks a manual override (4): if you're talking, you're
-busy regardless of what you set. Paused/disconnected outrank everything
-because there is no meaningful color to show.
+The trigger band: the loop evaluates each enabled trigger's condition and
+hands the resolver the list of *active* triggers (as plain dicts) on
+``state.active_triggers``. The highest-``priority`` active trigger wins; on
+a tie the earlier one (config order) wins. A manual override resolves at a
+fixed ``OVERRIDE_PRIORITY`` (50): an active trigger beats the override only
+if its priority is strictly greater. This keeps the resolver pure — all
+I/O (mic/lock/webcam sampling) happens in the loop.
 
-The resolver emits both ``routine`` (the winning source) and ``kind``
+The resolver emits both ``routine`` (the winning source id) and ``kind``
 (the rendering bucket the UI switches on): one of
-``paused | disconnected | call | override | routine | available | off | dim``.
+``paused | disconnected | preview | trigger | override | routine | available | off | dim``.
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
-from engine.config import Config, Routine
+from engine.config import OVERRIDE_PRIORITY, Config, Routine
 from engine.palette import name_of
 
 
@@ -123,22 +125,22 @@ def resolve(now: dt.datetime, state, config: Config) -> ResolvedStatus:
             kind="preview", effect=pv.get("effect"),
         )
 
-    # 4. live call (beats override)
-    if s.call_detection and state.in_call:
-        return ResolvedStatus(
-            "on_call", s.call_color, "In a call — detected automatically.",
-            kind="call",
-        )
-
-    # 5. screen locked — you stepped away
-    if getattr(s, "lock_detection", False) and getattr(state, "locked", False):
-        return ResolvedStatus(
-            "locked", s.lock_color, "Screen locked — you're away.",
-            kind="locked",
-        )
-
-    # 6. manual override
+    # 4. trigger + override band
+    active = list(getattr(state, "active_triggers", None) or [])
+    best = max(active, key=lambda t: t.get("priority", OVERRIDE_PRIORITY)) if active else None
     ov = state.manual_override
+
+    # a trigger wins when there is no override, or its priority strictly
+    # exceeds the override's fixed priority
+    if best is not None and (
+        not ov or best.get("priority", OVERRIDE_PRIORITY) > OVERRIDE_PRIORITY
+    ):
+        return ResolvedStatus(
+            best.get("id", "trigger"), best["color"],
+            f"{best.get('name') or 'Trigger'} — active.",
+            kind="trigger", effect=best.get("effect"),
+        )
+
     if ov:
         color = ov.get("color")
         expiry = ov.get("expiry")

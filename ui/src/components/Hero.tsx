@@ -8,8 +8,8 @@ const REASON_LEAD =
 
 function reasonIcon(kind: State["kind"]): IconName {
   switch (kind) {
-    case "call":
-      return "mic";
+    case "trigger":
+      return "bolt";
     case "override":
       return "cursor";
     case "routine":

@@ -27,12 +27,11 @@ import os
 import threading
 import time
 
-from engine import autostart, conflict, effects, selfupdate, session, updater
-from engine.config import Config, load_config, save_config
+from engine import autostart, conflict, effects, mic, selfupdate, session, updater, webcam
+from engine.config import Config, Trigger, load_config, save_config
 from engine.device import Flag
 from engine.history import History
 from engine.logging_setup import get_logger
-from engine.mic import mic_in_use
 from engine.palette import dim_rgb, is_color, resolve_rgb
 from engine.resolver import ResolvedStatus, resolve
 from engine.state import State
@@ -187,15 +186,76 @@ class BeaconEngine:
             self.state.effect = resolved.effect
             self.state.updated_at = now
 
+    def _trigger_active(self, t: Trigger, signals: dict) -> bool:
+        """Evaluate one trigger's condition against the sampled signals."""
+        if t.type == "mic":
+            return signals["mic"]
+        if t.type == "lock":
+            return signals["lock"]
+        if t.type == "webcam":
+            return signals["webcam"]
+        if t.type == "mic_app":
+            return mic.capturer_matches(
+                t.params.get("app", ""), signals["mic_capturers"]
+            )
+        return False
+
+    def _evaluate_triggers(self) -> tuple[dict, list[dict]]:
+        """Sample raw signals once, then evaluate every enabled trigger.
+
+        Each detector is isolated: a bad app string or a flaky registry read
+        can't take down the tick. Returns (signals, active_triggers) where
+        active_triggers is the resolver-/UI-ready list of firing triggers.
+        """
+        def _safe(fn, default):
+            try:
+                return fn()
+            except Exception:
+                log.debug("signal sample failed: %s", fn, exc_info=True)
+                return default
+
+        mic_caps = _safe(mic.mic_capturers, [])
+        cam_caps = _safe(webcam.webcam_capturers, [])
+        locked = _safe(session.screen_locked, False)
+        signals = {
+            "mic": bool(mic_caps),
+            "webcam": bool(cam_caps),
+            "lock": bool(locked),
+            "mic_capturers": mic_caps,
+            "webcam_capturers": cam_caps,
+        }
+
+        active: list[dict] = []
+        for t in self.config.triggers:
+            if not t.enabled:
+                continue
+            try:
+                if self._trigger_active(t, signals):
+                    active.append(
+                        {
+                            "id": t.id,
+                            "name": t.name,
+                            "type": t.type,
+                            "color": t.color,
+                            "priority": t.priority,
+                            "effect": t.effect,
+                        }
+                    )
+            except Exception:
+                log.debug("trigger %r evaluation failed", t.id, exc_info=True)
+        return signals, active
+
     def tick(self) -> None:
         """One resolve+write cycle. Safe to call from the loop only."""
         now = dt.datetime.now()
 
-        # 1. sample inputs
-        self.state.in_call = mic_in_use() if self.config.settings.call_detection else False
-        self.state.locked = (
-            session.screen_locked() if self.config.settings.lock_detection else False
-        )
+        # 1. sample inputs + evaluate triggers
+        signals, active = self._evaluate_triggers()
+        with self.state.lock:
+            self.state.signals = signals
+            self.state.active_triggers = active
+            self.state.in_call = signals["mic"]  # derived convenience
+            self.state.locked = signals["lock"]
 
         # 2. expire a finished override
         ov = self.state.manual_override

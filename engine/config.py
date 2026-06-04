@@ -29,6 +29,44 @@ class ConfigError(ValueError):
     """Raised when an incoming config fails validation."""
 
 
+# Trigger condition types. Each maps to a detector evaluated each tick
+# (see engine.loop). "mic" and "lock" are the unified successors of the old
+# call_detection / lock_detection settings.
+TRIGGER_TYPES = ("mic", "mic_app", "webcam", "lock")
+
+# Manual override resolves at this priority. A trigger wins over a manual
+# override only if its priority is strictly greater (see engine.resolver).
+PRIORITY_MIN, PRIORITY_MAX = 0, 100
+OVERRIDE_PRIORITY = 50
+
+
+def triggers_meta() -> dict:
+    """Trigger vocabulary for the UI (GET /api/triggers/meta)."""
+    return {
+        "types": [
+            {"id": "mic", "name": "In a call (mic in use)", "needs_app": False},
+            {"id": "mic_app", "name": "Specific app on mic", "needs_app": True},
+            {"id": "webcam", "name": "Webcam in use", "needs_app": False},
+            {"id": "lock", "name": "Screen locked", "needs_app": False},
+        ],
+        "priority_min": PRIORITY_MIN,
+        "priority_max": PRIORITY_MAX,
+        "override_priority": OVERRIDE_PRIORITY,
+    }
+
+
+@dataclass
+class Trigger:
+    id: str
+    name: str
+    enabled: bool
+    type: str  # one of TRIGGER_TYPES
+    color: str  # palette slot name or "#RRGGBB" custom color
+    priority: int = 50  # 0..100, higher wins; 50 == manual override
+    params: dict = field(default_factory=dict)  # e.g. {"app": "teams"}
+    effect: dict = field(default_factory=lambda: {"type": "solid"})
+
+
 @dataclass
 class Routine:
     id: str
@@ -43,10 +81,6 @@ class Routine:
 
 @dataclass
 class Settings:
-    call_detection: bool = True
-    call_color: str = "busy"
-    lock_detection: bool = True
-    lock_color: str = "away"
     available_color: str = "available"
     off_behavior: str = "off"  # "off" | "dim" | <slot name>
     heartbeat_interval_seconds: int = 60
@@ -55,17 +89,27 @@ class Settings:
 @dataclass
 class Config:
     routines: list[Routine] = field(default_factory=list)
+    triggers: list[Trigger] = field(default_factory=list)
     settings: Settings = field(default_factory=Settings)
 
     def to_dict(self) -> dict:
         return {
             "routines": [asdict(r) for r in self.routines],
+            "triggers": [asdict(t) for t in self.triggers],
             "settings": asdict(self.settings),
         }
 
 
+def default_triggers() -> list[Trigger]:
+    """The two seed triggers — the unified successors of call/lock detection."""
+    return [
+        Trigger("t_call", "In a call", True, "mic", "busy", 70),
+        Trigger("t_lock", "Screen locked", True, "lock", "away", 60),
+    ]
+
+
 def default_config() -> Config:
-    """Defaults from the design's DEFAULT_ROUTINES."""
+    """Defaults from the design's DEFAULT_ROUTINES + seed triggers."""
     return Config(
         routines=[
             Routine("r1", "Lunch", True, [0, 1, 2, 3, 4], "12:00", "12:30", "lunch"),
@@ -73,6 +117,7 @@ def default_config() -> Config:
                 "r2", "Wind-down focus", True, [0, 1, 2, 3, 4], "16:00", "17:30", "focus"
             ),
         ],
+        triggers=default_triggers(),
         settings=Settings(),
     )
 
@@ -115,22 +160,72 @@ def _routine_from_dict(d: dict) -> Routine:
     return Routine(rid, name, enabled, days, start, end, color, effect)
 
 
+def _trigger_from_dict(d: dict) -> Trigger:
+    try:
+        tid = str(d["id"])
+        name = str(d.get("name", ""))
+        enabled = bool(d["enabled"])
+        ttype = str(d["type"])
+        color = str(d["color"])
+    except (KeyError, TypeError, ValueError) as e:
+        raise ConfigError(f"malformed trigger: {e}")
+
+    if ttype not in TRIGGER_TYPES:
+        raise ConfigError(f"trigger {tid!r}: unknown type {ttype!r}")
+    if not is_color(color):
+        raise ConfigError(
+            f"trigger {tid!r}: invalid color {color!r} (slot name or #RRGGBB)"
+        )
+
+    params = d.get("params") or {}
+    if not isinstance(params, dict):
+        raise ConfigError(f"trigger {tid!r}: params must be an object")
+    # mic_app with an empty/absent app is allowed: it simply never matches
+    # (capturer_matches("") is False). This keeps a half-finished trigger from
+    # failing the whole-config save while the user is still typing the name.
+
+    try:
+        priority = int(d.get("priority", 50))
+    except (TypeError, ValueError):
+        raise ConfigError(f"trigger {tid!r}: priority must be an integer")
+    priority = max(PRIORITY_MIN, min(PRIORITY_MAX, priority))
+
+    try:
+        effect = normalize_effect(d.get("effect"))
+    except EffectError as e:
+        raise ConfigError(f"trigger {tid!r}: {e}")
+
+    return Trigger(tid, name, enabled, ttype, color, priority, params, effect)
+
+
+def _migrate_triggers(settings_d: dict) -> list[Trigger]:
+    """Seed triggers from legacy call_*/lock_* settings for configs that
+    predate the triggers list. Mirrors the prior built-in behavior exactly:
+    mic at priority 70 and lock at 60 (both above a manual override)."""
+    out: list[Trigger] = []
+    if bool(settings_d.get("call_detection", True)):
+        out.append(
+            Trigger("t_call", "In a call", True, "mic",
+                    str(settings_d.get("call_color", "busy")), 70)
+        )
+    if bool(settings_d.get("lock_detection", True)):
+        out.append(
+            Trigger("t_lock", "Screen locked", True, "lock",
+                    str(settings_d.get("lock_color", "away")), 60)
+        )
+    return out
+
+
 def _settings_from_dict(d: dict) -> Settings:
     s = Settings()
     if not isinstance(d, dict):
         raise ConfigError("settings must be an object")
-    s.call_detection = bool(d.get("call_detection", s.call_detection))
-    s.call_color = str(d.get("call_color", s.call_color))
-    s.lock_detection = bool(d.get("lock_detection", s.lock_detection))
-    s.lock_color = str(d.get("lock_color", s.lock_color))
     s.available_color = str(d.get("available_color", s.available_color))
     s.off_behavior = str(d.get("off_behavior", s.off_behavior))
     s.heartbeat_interval_seconds = int(
         d.get("heartbeat_interval_seconds", s.heartbeat_interval_seconds)
     )
 
-    if not is_color(s.call_color):
-        raise ConfigError(f"invalid call_color {s.call_color!r}")
     if not is_color(s.available_color):
         raise ConfigError(f"invalid available_color {s.available_color!r}")
     # off_behavior is "off", "dim", or any color (slot name or #RRGGBB).
@@ -155,7 +250,22 @@ def config_from_dict(d: dict) -> Config:
         raise ConfigError("routine ids must be unique")
 
     settings = _settings_from_dict(d.get("settings", {}))
-    return Config(routines=routines, settings=settings)
+
+    # Triggers are authoritative when present; otherwise migrate from the
+    # legacy call_*/lock_* settings (one-time, transparent on next save).
+    if "triggers" in d:
+        triggers_in = d.get("triggers") or []
+        if not isinstance(triggers_in, list):
+            raise ConfigError("triggers must be a list")
+        triggers = [_trigger_from_dict(t) for t in triggers_in]
+    else:
+        triggers = _migrate_triggers(d.get("settings", {}))
+
+    tids = [t.id for t in triggers]
+    if len(tids) != len(set(tids)):
+        raise ConfigError("trigger ids must be unique")
+
+    return Config(routines=routines, triggers=triggers, settings=settings)
 
 
 # ---------------------------------------------------------------- persistence

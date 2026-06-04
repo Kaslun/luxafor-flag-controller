@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 
@@ -15,7 +15,7 @@ WED_10 = dt.datetime(2026, 6, 3, 10, 0)
 
 
 # Lightweight stand-in for the live engine State — the resolver only
-# duck-types these four attributes, so we don't need the real threaded State.
+# duck-types these attributes, so we don't need the real threaded State.
 # Kept local (not in conftest) so the test module has no cross-module import.
 @dataclass
 class FakeState:
@@ -25,6 +25,12 @@ class FakeState:
     locked: bool = False
     manual_override: dict | None = None
     preview: dict | None = None
+    active_triggers: list = field(default_factory=list)
+
+
+def trig(id="t", name="T", color="busy", priority=70, effect=None):
+    """A firing-trigger dict as the loop hands it to the resolver."""
+    return {"id": id, "name": name, "color": color, "priority": priority, "effect": effect}
 
 
 def routine(**kw) -> Routine:
@@ -48,22 +54,22 @@ def cfg(routines=None, **settings):
 # ----------------------------------------------------------- priority ladder
 
 def test_paused_beats_everything():
-    s = FakeState(paused=True, in_call=True, device_connected=False)
+    s = FakeState(paused=True, device_connected=False, active_triggers=[trig()])
     r = resolve(WED_10, s, cfg())
     assert r.kind == "paused"
     assert r.off is True
 
 
-def test_disconnected_beats_call():
-    s = FakeState(device_connected=False, in_call=True)
+def test_disconnected_beats_trigger():
+    s = FakeState(device_connected=False, active_triggers=[trig()])
     r = resolve(WED_10, s, cfg())
     assert r.kind == "disconnected"
     assert r.off is True
 
 
-def test_preview_beats_call_and_override():
+def test_preview_beats_trigger_and_override():
     s = FakeState(
-        in_call=True,
+        active_triggers=[trig()],
         manual_override={"color": "focus", "expiry": None},
         preview={"color": "#123456", "effect": {"type": "solid"}},
     )
@@ -72,36 +78,50 @@ def test_preview_beats_call_and_override():
     assert r.color == "#123456"
 
 
-def test_locked_when_enabled():
-    s = FakeState(locked=True)
-    r = resolve(WED_10, s, cfg(lock_detection=True, lock_color="away"))
-    assert r.kind == "locked"
+def test_active_trigger_resolves():
+    s = FakeState(active_triggers=[trig(name="Screen locked", color="away")])
+    r = resolve(WED_10, s, cfg())
+    assert r.kind == "trigger"
     assert r.color == "away"
+    assert "Screen locked" in r.reason
 
 
-def test_call_beats_locked():
-    s = FakeState(in_call=True, locked=True)
-    r = resolve(WED_10, s, cfg(lock_detection=True))
-    assert r.kind == "call"
+def test_highest_priority_trigger_wins():
+    s = FakeState(
+        active_triggers=[
+            trig(id="lo", color="lunch", priority=40),
+            trig(id="hi", color="focus", priority=90),
+        ]
+    )
+    r = resolve(WED_10, s, cfg())
+    assert r.kind == "trigger"
+    assert r.color == "focus"
 
 
-def test_locked_ignored_when_disabled():
-    s = FakeState(locked=True)
-    r = resolve(WED_10, s, cfg(lock_detection=False, off_behavior="off"))
-    assert r.kind == "off"
-
-
-def test_call_beats_override_and_routine():
-    s = FakeState(in_call=True, manual_override={"color": "focus", "expiry": None})
+def test_trigger_beats_override_when_higher():
+    s = FakeState(
+        active_triggers=[trig(color="busy", priority=70)],
+        manual_override={"color": "focus", "expiry": None},
+    )
     r = resolve(WED_10, s, cfg(routines=[routine(color="lunch")]))
-    assert r.kind == "call"
-    assert r.color == "busy"  # default call_color
+    assert r.kind == "trigger"
+    assert r.color == "busy"
 
 
-def test_call_disabled_falls_through():
-    s = FakeState(in_call=True)
-    r = resolve(WED_10, s, cfg(call_detection=False))
-    # no override, no routine, default off_behavior "off" -> floor off
+def test_override_beats_trigger_when_lower_or_equal():
+    # priority == OVERRIDE_PRIORITY (50): override wins (strictly-greater rule)
+    s = FakeState(
+        active_triggers=[trig(color="busy", priority=50)],
+        manual_override={"color": "focus", "expiry": None},
+    )
+    r = resolve(WED_10, s, cfg())
+    assert r.kind == "override"
+    assert r.color == "focus"
+
+
+def test_no_active_triggers_falls_through():
+    s = FakeState(active_triggers=[])
+    r = resolve(WED_10, s, cfg(off_behavior="off"))
     assert r.kind == "off"
 
 
@@ -318,4 +338,5 @@ def test_config_roundtrip_defaults():
     d = default_config().to_dict()
     rebuilt = config_from_dict(d)
     assert len(rebuilt.routines) == 2
-    assert rebuilt.settings.call_color == "busy"
+    assert len(rebuilt.triggers) == 2
+    assert rebuilt.settings.available_color == "available"

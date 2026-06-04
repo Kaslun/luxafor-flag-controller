@@ -3,7 +3,7 @@ import { api } from "./api";
 import { usePolling } from "./hooks/usePolling";
 import { accentFor, inkFor } from "./model";
 import { useTheme } from "./theme";
-import type { Config, Effect, EffectsMeta, PaletteSlot, State } from "./types";
+import type { Config, Effect, EffectsMeta, PaletteSlot, State, TriggerMeta } from "./types";
 import { Header } from "./components/Header";
 import { Hero } from "./components/Hero";
 import { Flag } from "./components/Flag";
@@ -20,6 +20,7 @@ export default function App() {
 
   const [palette, setPalette] = useState<PaletteSlot[]>([]);
   const [effects, setEffects] = useState<EffectsMeta | null>(null);
+  const [triggerMeta, setTriggerMeta] = useState<TriggerMeta | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
 
   const [showSettings, setShowSettings] = useState(false);
@@ -38,6 +39,7 @@ export default function App() {
   useEffect(() => {
     api.getPalette().then(setPalette).catch((e) => setErr(String(e)));
     api.getEffects().then(setEffects).catch((e) => setErr(String(e)));
+    api.getTriggerMeta().then(setTriggerMeta).catch((e) => setErr(String(e)));
     api.getConfig().then(setConfig).catch((e) => setErr(String(e)));
   }, []);
 
@@ -59,7 +61,7 @@ export default function App() {
     }, 400);
   };
 
-  if (!state || !config || palette.length === 0 || !effects) {
+  if (!state || !config || palette.length === 0 || !effects || !triggerMeta) {
     return (
       <div data-theme={theme} className="app" style={{ placeItems: "center", display: "grid" }}>
         <div className="muted">Connecting to Beacon…</div>
@@ -186,6 +188,7 @@ export default function App() {
             config={config}
             palette={palette}
             effects={effects}
+            triggerMeta={triggerMeta}
             state={state}
             onChange={commitConfig}
           />

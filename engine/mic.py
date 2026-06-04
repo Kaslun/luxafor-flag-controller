@@ -102,6 +102,21 @@ def mic_in_use() -> bool:
     return len(mic_capturers()) > 0
 
 
+def capturer_matches(app: str, capturers: list[str] | None = None) -> bool:
+    """True if any current mic capturer's name contains ``app`` (case-insensitive).
+
+    Registry capturer names are munged executable paths (e.g.
+    ``C:#Program Files#Zoom#bin#Zoom.exe``), so a substring match on a short
+    token like ``"zoom"`` or ``"teams"`` is the practical matching rule.
+    Empty ``app`` never matches.
+    """
+    needle = (app or "").strip().lower()
+    if not needle:
+        return False
+    caps = mic_capturers() if capturers is None else capturers
+    return any(needle in c.lower() for c in caps)
+
+
 if __name__ == "__main__":  # ad-hoc debugging: prints live capturers
     caps = mic_capturers()
     print("mic in use:", bool(caps))

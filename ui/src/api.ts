@@ -1,6 +1,14 @@
 // Typed fetch wrappers for the engine's localhost API.
 
-import type { Config, Effect, EffectsMeta, PaletteSlot, State } from "./types";
+import type {
+  Config,
+  Effect,
+  EffectsMeta,
+  PaletteSlot,
+  Signals,
+  State,
+  TriggerMeta,
+} from "./types";
 
 async function getJSON<T>(url: string): Promise<T> {
   const r = await fetch(url);
@@ -32,6 +40,8 @@ export const api = {
   getConfig: () => getJSON<Config>("/api/config"),
   getPalette: () => getJSON<PaletteSlot[]>("/api/palette"),
   getEffects: () => getJSON<EffectsMeta>("/api/effects"),
+  getTriggerMeta: () => getJSON<TriggerMeta>("/api/triggers/meta"),
+  getSignals: () => getJSON<Signals>("/api/signals"),
 
   putConfig: (cfg: Config) => send("PUT", "/api/config", cfg),
 
