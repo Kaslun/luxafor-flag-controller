@@ -255,33 +255,43 @@ class BeaconEngine:
         self._loop = asyncio.get_running_loop()
         log.info("engine loop starting")
 
-        # initial ambient checks (off-thread so startup isn't blocked)
-        await self._refresh_conflict()
-        await self._refresh_update()
+        last_conflict = 0.0
+        last_update = 0.0
 
-        last_conflict = dt.datetime.now()
-        last_update = dt.datetime.now()
-
+        # The whole iteration is guarded: an unhandled error here would
+        # silently kill the task (its traceback goes to a None stderr in the
+        # windowed exe), freezing the flag on its last color. Nothing short
+        # of _stop may end this loop.
         while not self._stop.is_set():
             try:
                 self.tick()
-            except Exception as e:  # never let one bad tick kill the loop
-                log.exception("tick error: %s", e)
+                now = dt.datetime.now().timestamp()
+                if now - last_conflict >= CONFLICT_EVERY:
+                    await self._refresh_conflict()
+                    last_conflict = now
+                if now - last_update >= UPDATE_EVERY:
+                    await self._refresh_update()
+                    last_update = now
+            except Exception:
+                log.exception("engine loop iteration failed (continuing)")
 
-            now = dt.datetime.now()
-            if (now - last_conflict).total_seconds() >= CONFLICT_EVERY:
-                await self._refresh_conflict()
-                last_conflict = now
-            if (now - last_update).total_seconds() >= UPDATE_EVERY:
-                await self._refresh_update()
-                last_update = now
-
-            # wait for the next tick or an immediate wake from a command
+            # wait for the next tick or an immediate wake from a command;
+            # never let the wait itself end the loop
             try:
                 await asyncio.wait_for(self._wake.wait(), timeout=TICK_SECONDS)
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 pass
-            self._wake.clear()
+            except Exception:
+                log.exception("engine loop wait failed; backing off")
+                try:
+                    await asyncio.sleep(TICK_SECONDS)
+                except Exception:
+                    pass
+            finally:
+                try:
+                    self._wake.clear()
+                except Exception:
+                    pass
 
         log.info("engine loop stopped")
 

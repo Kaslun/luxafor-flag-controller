@@ -76,6 +76,17 @@ def create_app(engine) -> FastAPI:
     async def lifespan(_app: FastAPI):
         # run the engine tick loop on uvicorn's event loop
         task = asyncio.create_task(engine.run())
+
+        def _on_done(t: asyncio.Task):
+            # the loop should only end on shutdown; if it ends otherwise,
+            # make the reason visible instead of letting it vanish
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc is not None:
+                log.error("engine loop task ended unexpectedly: %r", exc)
+
+        task.add_done_callback(_on_done)
         try:
             yield
         finally:
@@ -93,6 +104,17 @@ def create_app(engine) -> FastAPI:
         redoc_url=None,
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def no_cache_html(request, call_next):
+        # Vite asset filenames are content-hashed (safe to cache forever),
+        # but index.html must never be cached or an in-place update leaves
+        # the browser on the old bundle. Force it to revalidate.
+        resp = await call_next(request)
+        path = request.url.path
+        if path == "/" or path.endswith(".html"):
+            resp.headers["Cache-Control"] = "no-store, must-revalidate"
+        return resp
 
     @app.get("/api/state")
     def get_state():
