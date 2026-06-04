@@ -19,6 +19,11 @@ def test_swap_script_contains_paths_and_relaunch():
     assert "move /Y" in s              # swaps the file
     assert "ping" in s                 # console-less delay (not `timeout`)
     assert 'del "%~f0"' in s           # script removes itself
+    # clears PyInstaller one-file relaunch markers before relaunch, so the new
+    # exe doesn't inherit and reuse the old (deleted) _MEI extraction dir
+    assert 'set "_MEIPASS2="' in s
+    # the clears must come before the relaunch line
+    assert s.index('set "_MEIPASS2="') < s.index('start ""')
 
 
 def test_apply_refuses_when_not_frozen():

@@ -83,6 +83,14 @@ if %tries% GEQ 90 goto done
 ping -n 2 127.0.0.1 >NUL
 goto movel
 :done
+rem Clear PyInstaller one-file relaunch markers before starting the new exe.
+rem They are inherited from THIS Beacon's environment and point at the old
+rem (about-to-be-deleted) _MEIxxxx extraction dir; if they leak into the new
+rem process it reuses that dead dir and fails with "Failed to load Python DLL".
+set "_MEIPASS2="
+set "_PYI_ARCHIVE_FILE="
+set "_PYI_APPLICATION_HOME_DIR="
+set "_PYI_PARENT_PROCESS_LEVEL="
 start "" "%DST%" --show
 del "%SRC%" >NUL 2>NUL
 del "%~f0" >NUL 2>NUL
@@ -108,10 +116,25 @@ def launch_swap(pid: int, new_exe: Path, target_exe: Path) -> None:
     script.write_text(build_swap_script(pid, new_exe, target_exe), encoding="ascii")
     DETACHED_PROCESS = 0x00000008
     CREATE_NEW_PROCESS_GROUP = 0x00000200
+    # Strip PyInstaller's one-file relaunch markers from the environment we
+    # hand to the swap script. Otherwise they propagate to the relaunched exe,
+    # which would then try to load from this (soon-deleted) process's _MEI dir.
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k
+        not in (
+            "_MEIPASS2",
+            "_PYI_ARCHIVE_FILE",
+            "_PYI_APPLICATION_HOME_DIR",
+            "_PYI_PARENT_PROCESS_LEVEL",
+        )
+    }
     subprocess.Popen(
         ["cmd", "/c", str(script)],
         creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
         close_fds=True,
+        env=env,
     )
     log.info("update swap script launched; exiting for replacement")
 
