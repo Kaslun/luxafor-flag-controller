@@ -45,6 +45,8 @@ class Routine:
 class Settings:
     call_detection: bool = True
     call_color: str = "busy"
+    lock_detection: bool = True
+    lock_color: str = "away"
     available_color: str = "available"
     off_behavior: str = "off"  # "off" | "dim" | <slot name>
     heartbeat_interval_seconds: int = 60
@@ -119,6 +121,8 @@ def _settings_from_dict(d: dict) -> Settings:
         raise ConfigError("settings must be an object")
     s.call_detection = bool(d.get("call_detection", s.call_detection))
     s.call_color = str(d.get("call_color", s.call_color))
+    s.lock_detection = bool(d.get("lock_detection", s.lock_detection))
+    s.lock_color = str(d.get("lock_color", s.lock_color))
     s.available_color = str(d.get("available_color", s.available_color))
     s.off_behavior = str(d.get("off_behavior", s.off_behavior))
     s.heartbeat_interval_seconds = int(

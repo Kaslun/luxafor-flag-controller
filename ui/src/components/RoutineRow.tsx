@@ -55,6 +55,13 @@ export function RoutineRow({
           </div>
         </div>
         <div className="r-right" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="r-colorbtn"
+            title="Change color"
+            onClick={() => setShowPicker(true)}
+            style={{ background: hex, ["--sw" as string]: hex }}
+          />
           <div
             className={"switch" + (r.enabled ? " on" : "")}
             role="switch"

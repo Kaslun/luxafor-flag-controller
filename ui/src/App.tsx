@@ -7,9 +7,9 @@ import type { Config, Effect, EffectsMeta, PaletteSlot, State } from "./types";
 import { Header } from "./components/Header";
 import { Hero } from "./components/Hero";
 import { Flag } from "./components/Flag";
-import { Tabs, type TabId } from "./components/Tabs";
+import { Automations } from "./components/Automations";
 import { RoutinesTab } from "./components/RoutinesTab";
-import { SettingsTab } from "./components/SettingsTab";
+import { SettingsModal } from "./components/SettingsModal";
 import { OverridePopover } from "./components/OverridePopover";
 import { ConflictSheet } from "./components/ConflictSheet";
 import { UpdateBanner, ConflictBanner } from "./components/Banners";
@@ -22,7 +22,7 @@ export default function App() {
   const [effects, setEffects] = useState<EffectsMeta | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
 
-  const [tab, setTab] = useState<TabId>("routines");
+  const [showSettings, setShowSettings] = useState(false);
   const [showOverride, setShowOverride] = useState(false);
   const [showConflict, setShowConflict] = useState(false);
   const [rechecking, setRechecking] = useState(false);
@@ -147,6 +147,7 @@ export default function App() {
         theme={theme}
         version={state.version}
         onToggleTheme={toggleTheme}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <div className="win-body">
@@ -158,9 +159,7 @@ export default function App() {
           onTogglePause={togglePause}
         />
 
-        <Tabs tab={tab} onChange={setTab} />
-
-        <div className="content">
+        <div className="content" style={{ paddingTop: 22 }}>
           {err && (
             <div className="banner warn">
               <div className="bx">{err}</div>
@@ -183,28 +182,20 @@ export default function App() {
             />
           )}
 
-          {tab === "routines" ? (
-            <RoutinesTab
-              config={config}
-              palette={palette}
-              effects={effects}
-              onChange={commitConfig}
-            />
-          ) : (
-            <SettingsTab
-              config={config}
-              palette={palette}
-              onChange={commitConfig}
-              autostartEnabled={state.autostart_enabled}
-              onToggleAutostart={toggleAutostart}
-              version={state.version}
-              updateAvailable={state.update_available}
-              checking={checkingUpdate}
-              onCheckUpdate={checkUpdate}
-              onInstallUpdate={installUpdate}
-              onOpenLogs={openLogs}
-            />
-          )}
+          <Automations
+            config={config}
+            palette={palette}
+            effects={effects}
+            state={state}
+            onChange={commitConfig}
+          />
+          <div style={{ height: 22 }} />
+          <RoutinesTab
+            config={config}
+            palette={palette}
+            effects={effects}
+            onChange={commitConfig}
+          />
         </div>
       </div>
 
@@ -225,6 +216,23 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {showSettings && (
+        <SettingsModal
+          config={config}
+          palette={palette}
+          onChange={commitConfig}
+          autostartEnabled={state.autostart_enabled}
+          onToggleAutostart={toggleAutostart}
+          version={state.version}
+          updateAvailable={state.update_available}
+          checking={checkingUpdate}
+          onCheckUpdate={checkUpdate}
+          onInstallUpdate={installUpdate}
+          onOpenLogs={openLogs}
+          onClose={() => setShowSettings(false)}
+        />
       )}
 
       {showOverride && (

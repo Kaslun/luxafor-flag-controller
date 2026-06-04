@@ -4,12 +4,12 @@ Single process: uvicorn (with the engine tick loop running as a task on
 its event loop) on the main thread, the pystray icon on a daemon thread.
 
 Behavior on launch:
-  - Single instance: if Beacon is already running, just open its dashboard
-    and exit — double-clicking the exe (or shortcut) never spawns a second
-    tray icon on a different port.
-  - Browser: open the dashboard automatically on first-ever run (onboarding)
-    or when launched with ``--show`` (used by the post-update relaunch and
-    the "open" shortcut). A plain autostart launch stays quietly in the tray.
+  - Single instance: a named mutex makes the guard atomic. If Beacon is
+    already running, we just open its dashboard and exit — double-clicking
+    the exe (or shortcut) never spawns a second tray icon on another port.
+  - Browser: open the dashboard automatically on a normal manual launch,
+    on first-ever run, or with ``--show`` (post-update relaunch). Only a
+    sign-in autostart launch (``--autostart``) stays quietly in the tray.
 
 The server binds loopback on a default port, falling back to the next few
 ports if taken; the chosen port is recorded in an instance lock file so the
@@ -27,6 +27,7 @@ from urllib.request import urlopen
 
 import uvicorn
 
+from engine import singleinstance
 from engine.app import create_app
 from engine.logging_setup import setup_logging
 from engine.loop import BeaconEngine
@@ -108,19 +109,23 @@ def main() -> None:
     log = setup_logging()
     log.info("Beacon starting")
 
-    # Single-instance guard: hand off to an already-running Beacon.
-    existing = _existing_instance_port()
-    if existing is not None:
-        log.info("another instance is running on %d; opening it", existing)
-        try:
-            webbrowser.open(f"http://{HOST}:{existing}/")
-        except Exception:
-            pass
+    # Single-instance guard (atomic). If another Beacon already holds the
+    # mutex, hand off to it: open its dashboard and exit.
+    if not singleinstance.acquire():
+        existing = _existing_instance_port()
+        log.info("another instance is running (port=%s); opening it", existing)
+        if existing is not None:
+            try:
+                webbrowser.open(f"http://{HOST}:{existing}/")
+            except Exception:
+                pass
         return
 
+    args = sys.argv[1:]
+    autostart_launch = "--autostart" in args
+    force_show = "--show" in args
     # First-ever run? (decide before the engine creates the config file)
     first_run = not config_path().exists()
-    force_show = "--show" in sys.argv[1:]
 
     engine = BeaconEngine()
     port = _pick_port()
@@ -130,7 +135,9 @@ def main() -> None:
 
     app = create_app(engine)
     start_tray(engine)
-    if force_show or first_run:
+    # Open the dashboard on a manual launch (or --show / first run); a
+    # sign-in autostart launch stays quietly in the tray.
+    if force_show or first_run or not autostart_launch:
         _open_browser_soon(url)
 
     log.info("serving on %s (first_run=%s show=%s)", url, first_run, force_show)

@@ -40,8 +40,10 @@ class State:
     # control flags / inputs
     paused: bool = False
     in_call: bool = False  # mic detection result
+    locked: bool = False  # screen-lock detection result
     device_connected: bool = False
     manual_override: dict | None = None  # {color: slot, expiry: ISO|None}
+    preview: dict | None = None  # {color, effect} live preview while picking
 
     # ambient
     update_available: dict | None = None  # {version, url}
@@ -65,6 +67,7 @@ class State:
                 "effect": dict(self.effect) if self.effect else None,
                 "paused": self.paused,
                 "in_call": self.in_call,
+                "locked": self.locked,
                 "device_connected": self.device_connected,
                 "manual_override": (
                     dict(self.manual_override) if self.manual_override else None

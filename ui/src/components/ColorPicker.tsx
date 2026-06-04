@@ -10,6 +10,7 @@ export function ColorPicker({
   color: initialColor,
   effect: initialEffect,
   title = "Color & effect",
+  allowEffects = true,
   onApply,
   onClose,
 }: {
@@ -18,6 +19,7 @@ export function ColorPicker({
   color: string;
   effect: Effect;
   title?: string;
+  allowEffects?: boolean;
   onApply: (color: string, effect: Effect) => void;
   onClose: () => void;
 }) {
@@ -43,6 +45,7 @@ export function ColorPicker({
             effect={effect}
             onColorChange={setColor}
             onEffectChange={setEffect}
+            allowEffects={allowEffects}
           />
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button className="btn" onClick={onClose}>

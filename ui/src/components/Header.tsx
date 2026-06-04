@@ -5,11 +5,13 @@ export function Header({
   theme,
   version,
   onToggleTheme,
+  onOpenSettings,
 }: {
   accent: string;
   theme: "dark" | "light";
   version: string;
   onToggleTheme: () => void;
+  onOpenSettings: () => void;
 }) {
   return (
     <div className="header">
@@ -27,6 +29,9 @@ export function Header({
       <div className="spacer" />
       <button className="tbtn" onClick={onToggleTheme} aria-label="toggle theme">
         <Icon name={theme === "dark" ? "sun" : "moon"} size={15} />
+      </button>
+      <button className="tbtn" onClick={onOpenSettings} aria-label="settings">
+        <Icon name="gear" size={16} />
       </button>
     </div>
   );

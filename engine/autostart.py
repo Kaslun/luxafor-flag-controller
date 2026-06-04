@@ -32,12 +32,16 @@ else:  # pragma: no cover - non-Windows fallback
 
 
 def _launch_command() -> str:
-    """The command Windows should run at sign-in."""
+    """The command Windows should run at sign-in.
+
+    The ``--autostart`` flag tells Beacon it was launched at sign-in, so it
+    stays quietly in the tray instead of popping the dashboard open.
+    """
     if getattr(sys, "frozen", False):
         # one-file/one-dir bundle: sys.executable is beacon.exe
-        return f'"{sys.executable}"'
+        return f'"{sys.executable}" --autostart'
     # development: re-run the module with the same interpreter
-    return f'"{sys.executable}" -m engine'
+    return f'"{sys.executable}" -m engine --autostart'
 
 
 def is_enabled() -> bool:

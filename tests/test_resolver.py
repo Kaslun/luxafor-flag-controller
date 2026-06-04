@@ -22,7 +22,9 @@ class FakeState:
     paused: bool = False
     device_connected: bool = True
     in_call: bool = False
+    locked: bool = False
     manual_override: dict | None = None
+    preview: dict | None = None
 
 
 def routine(**kw) -> Routine:
@@ -57,6 +59,36 @@ def test_disconnected_beats_call():
     r = resolve(WED_10, s, cfg())
     assert r.kind == "disconnected"
     assert r.off is True
+
+
+def test_preview_beats_call_and_override():
+    s = FakeState(
+        in_call=True,
+        manual_override={"color": "focus", "expiry": None},
+        preview={"color": "#123456", "effect": {"type": "solid"}},
+    )
+    r = resolve(WED_10, s, cfg())
+    assert r.kind == "preview"
+    assert r.color == "#123456"
+
+
+def test_locked_when_enabled():
+    s = FakeState(locked=True)
+    r = resolve(WED_10, s, cfg(lock_detection=True, lock_color="away"))
+    assert r.kind == "locked"
+    assert r.color == "away"
+
+
+def test_call_beats_locked():
+    s = FakeState(in_call=True, locked=True)
+    r = resolve(WED_10, s, cfg(lock_detection=True))
+    assert r.kind == "call"
+
+
+def test_locked_ignored_when_disabled():
+    s = FakeState(locked=True)
+    r = resolve(WED_10, s, cfg(lock_detection=False, off_behavior="off"))
+    assert r.kind == "off"
 
 
 def test_call_beats_override_and_routine():

@@ -51,7 +51,7 @@ Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 ; "Start with Windows" — same Run value the in-app toggle manages, so the two
 ; stay consistent. Removed on uninstall.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
-  ValueType: string; ValueName: "Beacon"; ValueData: """{app}\{#MyAppExeName}"""; \
+  ValueType: string; ValueName: "Beacon"; ValueData: """{app}\{#MyAppExeName}"" --autostart"; \
   Tasks: startup; Flags: uninsdeletevalue
 
 [Run]

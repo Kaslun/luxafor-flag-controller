@@ -24,9 +24,9 @@ export function OverridePopover({
   onClose: () => void;
 }) {
   const [color, setColor] = useState(current?.color ?? "busy");
-  const [effect, setEffect] = useState<Effect>(
-    current?.effect ?? { ...effects.default }
-  );
+  // Default to a solid effect so opening the override and picking a color
+  // reliably stops any pattern that was running.
+  const [effect, setEffect] = useState<Effect>({ ...effects.default });
   const [dur, setDur] = useState(30);
 
   const commit = () => onSet(color, dur === 0 ? null : dur, effect);

@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import type { Effect, EffectsMeta, PaletteSlot } from "../types";
 import { hexOf, isHex, selectable } from "../model";
+import { api } from "../api";
 
 const TYPE_LABELS: Record<string, string> = {
   solid: "Solid",
@@ -37,6 +39,30 @@ export function ColorEffectFields({
   const currentHex = hexOf(palette, color);
   const customActive = isHex(color);
 
+  // Picking a concrete color cancels a built-in pattern (which ignores
+  // color) — so changing the color always actually changes what's shown.
+  const pickColor = (c: string) => {
+    onColorChange(c);
+    if (effects.color_ignored_types.includes(eff.type)) {
+      onEffectChange({ ...eff, type: "solid" });
+    }
+  };
+
+  // Live preview: push the tentative color/effect to the flag while the
+  // user decides, and clear it when this editor closes.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      api.setPreview(color, eff).catch(() => {});
+    }, 120);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [color, JSON.stringify(eff)]);
+  useEffect(() => {
+    return () => {
+      api.clearPreview().catch(() => {});
+    };
+  }, []);
+
   return (
     <div style={{ display: "grid", gap: 16 }}>
       {/* presets */}
@@ -48,7 +74,7 @@ export function ColorEffectFields({
               key={p.slot}
               type="button"
               className={"slotchip" + (color === p.slot ? " on" : "")}
-              onClick={() => onColorChange(p.slot)}
+              onClick={() => pickColor(p.slot)}
             >
               <span className="sw" style={{ background: p.hex }} />
               {p.name}
@@ -64,7 +90,7 @@ export function ColorEffectFields({
           <input
             type="color"
             value={currentHex}
-            onChange={(e) => onColorChange(e.target.value.toUpperCase())}
+            onChange={(e) => pickColor(e.target.value.toUpperCase())}
             style={{
               width: 44,
               height: 38,
@@ -83,7 +109,7 @@ export function ColorEffectFields({
             placeholder={currentHex}
             onChange={(e) => {
               const v = e.target.value.trim();
-              if (isHex(v)) onColorChange(v.startsWith("#") ? v.toUpperCase() : "#" + v.toUpperCase());
+              if (isHex(v)) pickColor(v.startsWith("#") ? v.toUpperCase() : "#" + v.toUpperCase());
             }}
             aria-label="hex code"
           />

@@ -26,7 +26,7 @@ import datetime as dt
 import os
 import threading
 
-from engine import autostart, conflict, effects, selfupdate, updater
+from engine import autostart, conflict, effects, selfupdate, session, updater
 from engine.config import Config, load_config, save_config
 from engine.device import Flag
 from engine.history import History
@@ -99,6 +99,21 @@ class BeaconEngine:
     def clear_override(self) -> None:
         with self.state.lock:
             self.state.manual_override = None
+        self.request_tick()
+
+    def set_preview(self, color: str, effect: dict | None) -> dict:
+        """Live preview while the user picks a color (highest priority)."""
+        if not is_color(color):
+            raise ValueError(f"invalid preview color {color!r}")
+        pv = {"color": color, "effect": effects.normalize_effect(effect)}
+        with self.state.lock:
+            self.state.preview = pv
+        self.request_tick()
+        return pv
+
+    def clear_preview(self) -> None:
+        with self.state.lock:
+            self.state.preview = None
         self.request_tick()
 
     def set_paused(self, paused: bool) -> None:
@@ -176,7 +191,10 @@ class BeaconEngine:
         now = dt.datetime.now()
 
         # 1. sample inputs
-        self.state.in_call = mic_in_use()
+        self.state.in_call = mic_in_use() if self.config.settings.call_detection else False
+        self.state.locked = (
+            session.screen_locked() if self.config.settings.lock_detection else False
+        )
 
         # 2. expire a finished override
         ov = self.state.manual_override

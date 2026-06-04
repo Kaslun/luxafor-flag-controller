@@ -10,10 +10,12 @@ Priority ladder (highest first), matching the Beacon design's
 
   1. paused        — engine writes nothing
   2. disconnected  — no working HID handle
-  3. call          — mic capture detected (when call_detection on)
-  4. override       — manual override, not expired
-  5. routine       — a matching enabled scheduled block (later start wins)
-  6. floor          — off / dim / available, per settings.off_behavior
+  3. preview       — live color preview while the user is picking
+  4. call          — mic capture detected (when call_detection on)
+  5. locked        — screen locked (when lock_detection on)
+  6. override       — manual override, not expired
+  7. routine       — a matching enabled scheduled block (later start wins)
+  8. floor          — off / dim / available, per settings.off_behavior
 
 A real call (3) outranks a manual override (4): if you're talking, you're
 busy regardless of what you set. Paused/disconnected outrank everything
@@ -112,14 +114,30 @@ def resolve(now: dt.datetime, state, config: Config) -> ResolvedStatus:
             kind="disconnected", off=True,
         )
 
-    # 3. live call (beats override)
+    # 3. live preview — while the user is actively picking a color, show it
+    #    above everything so they see exactly what they'll get.
+    pv = getattr(state, "preview", None)
+    if pv and pv.get("color"):
+        return ResolvedStatus(
+            "preview", pv["color"], "Preview — choosing a color.",
+            kind="preview", effect=pv.get("effect"),
+        )
+
+    # 4. live call (beats override)
     if s.call_detection and state.in_call:
         return ResolvedStatus(
             "on_call", s.call_color, "In a call — detected automatically.",
             kind="call",
         )
 
-    # 4. manual override
+    # 5. screen locked — you stepped away
+    if getattr(s, "lock_detection", False) and getattr(state, "locked", False):
+        return ResolvedStatus(
+            "locked", s.lock_color, "Screen locked — you're away.",
+            kind="locked",
+        )
+
+    # 6. manual override
     ov = state.manual_override
     if ov:
         color = ov.get("color")
@@ -129,7 +147,7 @@ def resolve(now: dt.datetime, state, config: Config) -> ResolvedStatus:
             kind="override", effect=ov.get("effect"),
         )
 
-    # 5. active scheduled routine
+    # 7. active scheduled routine
     r = active_routine(config.routines, now)
     if r:
         return ResolvedStatus(
@@ -138,7 +156,7 @@ def resolve(now: dt.datetime, state, config: Config) -> ResolvedStatus:
             kind="routine", effect=getattr(r, "effect", None),
         )
 
-    # 6. floor — depends on off_behavior
+    # 8. floor — depends on off_behavior
     ob = s.off_behavior
     if ob == "off":
         return ResolvedStatus(

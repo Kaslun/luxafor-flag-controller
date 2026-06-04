@@ -25,7 +25,7 @@ from pystray import Menu, MenuItem
 
 from engine.logging_setup import get_logger
 from engine.palette import SELECTABLE, name_of, rgb_of
-from engine.paths import app_dir
+from engine.paths import log_path
 
 log = get_logger()
 
@@ -175,7 +175,7 @@ class TrayController:
 
     def _open_logs(self, icon, item):
         try:
-            os.startfile(str(app_dir()))  # noqa: S606 - Windows folder open
+            os.startfile(str(log_path()))  # noqa: S606 - open beacon.log
         except Exception as e:  # pragma: no cover
             log.debug("open logs failed: %s", e)
 

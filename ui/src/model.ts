@@ -72,6 +72,27 @@ export function accentFor(
   return hexOf(palette, slot);
 }
 
+/** Soften a vivid LED color for on-screen rendering.
+ *  Pure values like #00FF00 are harsh on a monitor but look pleasant on the
+ *  diffused physical flag; this dims + slightly de-saturates so the on-screen
+ *  flag preview reads like the real thing. Display-only — never sent to the
+ *  device. */
+export function screenSoften(hex: string): string {
+  const c = hex.replace("#", "");
+  if (c.length < 6) return hex;
+  let r = parseInt(c.slice(0, 2), 16);
+  let g = parseInt(c.slice(2, 4), 16);
+  let b = parseInt(c.slice(4, 6), 16);
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const mix = 0.18; // pull toward the channel's luminance to cut neon harshness
+  const dim = 0.9;
+  r = Math.round((r * (1 - mix) + lum * mix) * dim);
+  g = Math.round((g * (1 - mix) + lum * mix) * dim);
+  b = Math.round((b * (1 - mix) + lum * mix) * dim);
+  const h = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0");
+  return `#${h(r)}${h(g)}${h(b)}`;
+}
+
 /** WCAG-ish ink color for text on an accent background. */
 export function inkFor(hex: string): string {
   const c = hex.replace("#", "");

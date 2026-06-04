@@ -47,6 +47,10 @@ export const api = {
     }),
   clearOverride: () => send("DELETE", "/api/override"),
 
+  setPreview: (color: string, effect?: Effect | null) =>
+    send("POST", "/api/preview", { color, effect: effect ?? null }),
+  clearPreview: () => send("DELETE", "/api/preview"),
+
   pause: () => send("POST", "/api/pause"),
   resume: () => send("DELETE", "/api/pause"),
 

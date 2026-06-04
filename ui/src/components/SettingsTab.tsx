@@ -1,5 +1,4 @@
 import type { Config, PaletteSlot, Settings, UpdateAvailable } from "../types";
-import { nameOf } from "../model";
 import { Icon } from "../icons";
 import { SlotMini } from "./SlotMini";
 
@@ -35,40 +34,6 @@ export function SettingsTab({
 
   return (
     <div>
-      <div className="section-head">
-        <div>
-          <h2>Settings</h2>
-          <p>The defaults the engine falls back on when no routine or override applies.</p>
-        </div>
-      </div>
-
-      <div className="set-group" style={{ marginBottom: 18 }}>
-        <div className="set-row">
-          <div className="si">
-            <h3>Automatic call detection</h3>
-            <p>
-              Turns the flag {nameOf(palette, s.call_color).toLowerCase()} whenever
-              your mic is in a call. Always highest priority — never appears as a
-              routine.
-            </p>
-          </div>
-          <div className="set-ctl">
-            <SlotMini
-              palette={palette}
-              value={s.call_color}
-              onChange={(c) => setS({ call_color: c })}
-              disabled={!s.call_detection}
-            />
-            <div
-              className={"switch" + (s.call_detection ? " on" : "")}
-              role="switch"
-              aria-checked={s.call_detection}
-              onClick={() => setS({ call_detection: !s.call_detection })}
-            />
-          </div>
-        </div>
-      </div>
-
       <div className="set-group">
         <div className="set-row">
           <div className="si">

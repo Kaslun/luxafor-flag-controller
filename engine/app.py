@@ -29,7 +29,7 @@ from engine.config import ConfigError, config_from_dict
 from engine.effects import as_payload as effects_payload
 from engine.logging_setup import get_logger
 from engine.palette import as_payload as palette_payload
-from engine.paths import app_dir
+from engine.paths import log_path
 from engine.version import __version__
 
 log = get_logger()
@@ -40,6 +40,11 @@ log = get_logger()
 class OverrideBody(BaseModel):
     color: str
     duration_minutes: int | None = None
+    effect: dict | None = None
+
+
+class PreviewBody(BaseModel):
+    color: str
     effect: dict | None = None
 
 
@@ -127,6 +132,18 @@ def create_app(engine) -> FastAPI:
         engine.clear_override()
         return {"ok": True}
 
+    @app.post("/api/preview")
+    def post_preview(body: PreviewBody):
+        try:
+            return engine.set_preview(body.color, body.effect)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.delete("/api/preview")
+    def delete_preview():
+        engine.clear_preview()
+        return {"ok": True}
+
     @app.post("/api/pause")
     def post_pause():
         engine.set_paused(True)
@@ -157,15 +174,15 @@ def create_app(engine) -> FastAPI:
 
     @app.post("/api/logs/open")
     def post_open_logs():
-        # opens the AppData folder (config + logs + history) for diagnostics
-        d = app_dir()
+        # opens beacon.log in the default text editor for diagnostics
+        p = log_path()
         try:
-            os.startfile(str(d))  # type: ignore[attr-defined]  # Windows only
+            os.startfile(str(p))  # type: ignore[attr-defined]  # Windows only
         except AttributeError:
             raise HTTPException(status_code=501, detail="not supported on this OS")
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
-        return {"opened": str(d)}
+        return {"opened": str(p)}
 
     @app.post("/api/autostart")
     def post_autostart():

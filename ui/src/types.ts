@@ -51,6 +51,7 @@ export interface State {
   effect: Effect | null;
   paused: boolean;
   in_call: boolean;
+  locked: boolean;
   device_connected: boolean;
   manual_override: ManualOverride | null;
   update_available: UpdateAvailable | null;
@@ -74,6 +75,8 @@ export interface Routine {
 export interface Settings {
   call_detection: boolean;
   call_color: string;
+  lock_detection: boolean;
+  lock_color: string;
   available_color: string;
   off_behavior: string; // "off" | "dim" | <slot>
   heartbeat_interval_seconds: number;

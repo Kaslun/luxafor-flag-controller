@@ -2,6 +2,7 @@
 // colored tab. Ported from the design's Flag component (icons.jsx).
 
 import { useId } from "react";
+import { screenSoften } from "../model";
 
 export function Flag({
   hex = "#2FCB6F",
@@ -16,7 +17,10 @@ export function Flag({
   size?: number;
   blink?: boolean;
 }) {
-  const lit = off ? "#34343c" : hex;
+  // Render a softened version on screen so it reads like the diffused
+  // physical flag rather than a harsh monitor pixel.
+  const shown = off ? hex : screenSoften(hex);
+  const lit = off ? "#34343c" : shown;
   const tabOpacity = dim ? 0.42 : 1;
   const uid = useId().replace(/:/g, "");
 
@@ -39,7 +43,7 @@ export function Flag({
             width: "72%",
             height: "56%",
             borderRadius: "50%",
-            background: `radial-gradient(circle at 50% 50%, ${hex} 0%, transparent 66%)`,
+            background: `radial-gradient(circle at 50% 50%, ${shown} 0%, transparent 66%)`,
             opacity: dim ? 0.2 : 0.42,
             filter: "blur(8px)",
           }}
