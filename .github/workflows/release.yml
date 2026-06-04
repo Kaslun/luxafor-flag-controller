@@ -21,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -31,7 +31,10 @@ jobs:
           cache-dependency-path: ui/package-lock.json
 
       - name: Install engine (with dev deps)
-        run: pip install -e ".[dev]"
+        # use the setup-python interpreter explicitly so PyInstaller freezes
+        # against the same Python whose DLL it bundles (the runner has more
+        # than one Python; a mismatch ships an exe that can't load its DLL)
+        run: python -m pip install -e ".[dev]"
 
       - name: Build UI
         working-directory: ui
@@ -46,7 +49,32 @@ jobs:
 
       - name: Bundle exe
         shell: bash
-        run: pyinstaller packaging/beacon.spec --noconfirm --clean
+        # `python -m PyInstaller` (not bare `pyinstaller`) guarantees it runs
+        # under the setup-python interpreter, not some other Python on PATH
+        run: python -m PyInstaller packaging/beacon.spec --noconfirm --clean
+
+      - name: Smoke-test the bundled exe
+        shell: bash
+        # Launch the frozen exe and confirm it actually starts and serves the
+        # API. This catches bootloader/DLL-load failures (e.g. a Python
+        # version split bundling the wrong pythonXY.dll) that a build-only
+        # job would never surface, since CI never ran the exe before.
+        run: |
+          ./dist/beacon.exe --autostart &
+          ok=
+          for i in $(seq 1 20); do
+            for p in 54741 54742 54743; do
+              if curl -s -m 2 "http://127.0.0.1:$p/api/state" >/dev/null; then ok=1; break; fi
+            done
+            [ -n "$ok" ] && break
+            sleep 2
+          done
+          taskkill //F //IM beacon.exe >/dev/null 2>&1 || true
+          if [ -z "$ok" ]; then
+            echo "::error::bundled exe did not start — bootloader/DLL failure"
+            exit 1
+          fi
+          echo "smoke OK: exe started and served /api/state"
 
       - name: Verify version.json matches the tag
         shell: bash
