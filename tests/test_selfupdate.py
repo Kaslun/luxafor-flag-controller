@@ -9,15 +9,15 @@ import pytest
 from engine import selfupdate
 
 
-def test_swap_script_contains_pid_paths_and_relaunch():
+def test_swap_script_contains_paths_and_relaunch():
     s = selfupdate.build_swap_script(
         1234, Path(r"C:\new\beacon-new.exe"), Path(r"C:\app\beacon.exe")
     )
-    assert "PID eq 1234" in s          # waits for our process to exit
     assert r"C:\new\beacon-new.exe" in s
     assert r"C:\app\beacon.exe" in s
     assert "--show" in s               # relaunch opens the dashboard
     assert "move /Y" in s              # swaps the file
+    assert "ping" in s                 # console-less delay (not `timeout`)
     assert 'del "%~f0"' in s           # script removes itself
 
 

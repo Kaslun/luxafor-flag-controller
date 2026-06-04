@@ -60,43 +60,57 @@ def download(url: str, sha256: str | None = None) -> Path:
     return dest
 
 
+# Notes on the script:
+#  - No PID/tasklist wait: a running exe is locked, so `move /Y` simply fails
+#    until Beacon's processes (Python child AND the PyInstaller bootloader
+#    parent) have exited and released the file. We just retry the move until
+#    the source is gone — which is also simpler/more robust than parsing
+#    tasklist output in a console-less process.
+#  - Delays use `ping`, not `timeout`: `timeout` needs console input and
+#    fails in a detached/no-console process.
+#  - The counter is tested on a single-line `if` (re-parsed on each goto) to
+#    avoid the %var% delayed-expansion trap inside ( ) blocks.
 _SWAP_TEMPLATE = """@echo off
-setlocal enableextensions
-:waitloop
-tasklist /FI "PID eq {pid}" 2>NUL | find "{pid}" >NUL
-if not errorlevel 1 (
-  timeout /t 1 /nobreak >NUL
-  goto waitloop
-)
+setlocal
+set "SRC={new}"
+set "DST={target}"
 set /a tries=0
 :movel
-move /Y "{new}" "{target}" >NUL 2>&1
-if errorlevel 1 (
-  set /a tries+=1
-  if %tries% LSS 15 (
-    timeout /t 1 /nobreak >NUL
-    goto movel
-  )
-)
-start "" "{target}" --show
-del "%~f0"
+move /Y "%SRC%" "%DST%" >NUL 2>NUL
+if not exist "%SRC%" goto done
+set /a tries+=1
+if %tries% GEQ 90 goto done
+ping -n 2 127.0.0.1 >NUL
+goto movel
+:done
+start "" "%DST%" --show
+del "%SRC%" >NUL 2>NUL
+del "%~f0" >NUL 2>NUL
 """
 
 
 def build_swap_script(pid: int, new_exe: Path, target_exe: Path) -> str:
-    """The batch that waits for our PID to exit, swaps the exe, relaunches."""
-    return _SWAP_TEMPLATE.format(pid=pid, new=str(new_exe), target=str(target_exe))
+    """The batch that swaps the exe once Beacon exits, then relaunches it.
+
+    ``pid`` is accepted for API stability but no longer used — the move-retry
+    loop waits out the file lock directly.
+    """
+    return _SWAP_TEMPLATE.format(new=str(new_exe), target=str(target_exe))
 
 
 def launch_swap(pid: int, new_exe: Path, target_exe: Path) -> None:
-    """Write the swap script and spawn it detached so it outlives us."""
+    """Write the swap script and spawn it fully detached so it outlives us.
+
+    DETACHED_PROCESS alone gives the child no console at all — no flashing
+    window — and it keeps running after this process exits.
+    """
     script = app_dir() / "beacon-update.bat"
     script.write_text(build_swap_script(pid, new_exe, target_exe), encoding="ascii")
-    DETACHED = 0x00000008  # DETACHED_PROCESS
-    NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW
+    DETACHED_PROCESS = 0x00000008
+    CREATE_NEW_PROCESS_GROUP = 0x00000200
     subprocess.Popen(
         ["cmd", "/c", str(script)],
-        creationflags=DETACHED | NO_WINDOW,
+        creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
         close_fds=True,
     )
     log.info("update swap script launched; exiting for replacement")
