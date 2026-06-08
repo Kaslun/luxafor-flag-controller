@@ -130,15 +130,15 @@ def test_override_beats_routine():
     r = resolve(WED_10, s, cfg(routines=[routine(color="lunch")]))
     assert r.kind == "override"
     assert r.color == "focus"
-    assert "until you clear it" in r.reason
+    assert r.reason == "Manual"
 
 
-def test_override_with_expiry_reason():
+def test_override_reason_is_minimal():
     expiry = (WED_10 + dt.timedelta(minutes=30)).isoformat()
     s = FakeState(manual_override={"color": "focus", "expiry": expiry})
     r = resolve(WED_10, s, cfg())
     assert r.kind == "override"
-    assert "Focus" in r.reason
+    assert r.reason == "Manual"
 
 
 def test_routine_when_active():
@@ -213,24 +213,26 @@ def test_config_rejects_midnight_span():
         )
 
 
-def test_config_rejects_unknown_slot():
-    with pytest.raises(ConfigError):
-        config_from_dict(
-            {
-                "routines": [
-                    {
-                        "id": "x",
-                        "name": "x",
-                        "enabled": True,
-                        "days": [0],
-                        "start": "09:00",
-                        "end": "10:00",
-                        "color": "chartreuse",
-                    }
-                ],
-                "settings": {},
-            }
-        )
+def test_config_accepts_unknown_slot_reference():
+    # palette is editable, so any slot-name token is accepted and resolved at
+    # runtime (falls back to black if the slot was deleted) — only bad hex fails
+    cfg = config_from_dict(
+        {
+            "routines": [
+                {
+                    "id": "x",
+                    "name": "x",
+                    "enabled": True,
+                    "days": [0],
+                    "start": "09:00",
+                    "end": "10:00",
+                    "color": "my_custom_slot",
+                }
+            ],
+            "settings": {},
+        }
+    )
+    assert cfg.routines[0].color == "my_custom_slot"
 
 
 def test_config_rejects_duplicate_ids():
@@ -248,8 +250,10 @@ def test_config_rejects_duplicate_ids():
 
 
 def test_config_rejects_bad_off_behavior():
+    # a slot-name off_behavior is accepted (resolves to the resting colour);
+    # only a malformed hex is rejected
     with pytest.raises(ConfigError):
-        config_from_dict({"routines": [], "settings": {"off_behavior": "sparkle"}})
+        config_from_dict({"routines": [], "settings": {"off_behavior": "#ZZZ"}})
 
 
 def test_config_accepts_custom_hex_color():
@@ -339,4 +343,6 @@ def test_config_roundtrip_defaults():
     rebuilt = config_from_dict(d)
     assert len(rebuilt.routines) == 2
     assert len(rebuilt.triggers) == 2
+    assert len(rebuilt.palette) == 6
     assert rebuilt.settings.available_color == "available"
+    assert rebuilt.settings.brightness == 80

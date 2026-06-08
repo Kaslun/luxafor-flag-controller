@@ -1,8 +1,7 @@
-// Palette helpers + time/day formatting, ported from the design's model.jsx.
-// The palette is fetched from /api/palette at runtime; these helpers operate
-// over that fetched list.
+// Palette/colour helpers + time/day formatting + importance tiers.
+// Ported from the design's model.js; operates over the live config palette.
 
-import type { PaletteSlot } from "./types";
+import type { Effect, PaletteColor, Tier, TriggerType } from "./types";
 
 export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -11,33 +10,32 @@ const FALLBACK_HEX = "#3A3A42";
 export function isHex(color: string): boolean {
   return /^#?[0-9A-Fa-f]{6}$/.test(color || "");
 }
-
 function normHex(color: string): string {
   return color.startsWith("#") ? color : "#" + color;
 }
 
-/** Resolve a color value (slot name or "#RRGGBB") to a display hex. */
-export function hexOf(palette: PaletteSlot[], color: string): string {
+/** Resolve a colour value (slot name or "#RRGGBB") to a display hex. */
+export function hexOf(palette: PaletteColor[], color: string): string {
   if (isHex(color)) return normHex(color);
   const p = palette.find((s) => s.slot === color);
   if (!p) return FALLBACK_HEX;
   return p.off ? FALLBACK_HEX : p.hex;
 }
 
-export function nameOf(palette: PaletteSlot[], color: string): string {
+export function nameOf(palette: PaletteColor[], color: string): string {
   if (isHex(color)) return "Custom";
   const p = palette.find((s) => s.slot === color);
   return p ? p.name : color;
 }
 
-export function isOff(palette: PaletteSlot[], color: string): boolean {
+export function isOff(palette: PaletteColor[], color: string): boolean {
   if (isHex(color)) return false;
   const p = palette.find((s) => s.slot === color);
   return p ? p.off : false;
 }
 
 /** Selectable slots = everything except the special "off" slot. */
-export function selectable(palette: PaletteSlot[]): PaletteSlot[] {
+export function selectable(palette: PaletteColor[]): PaletteColor[] {
   return palette.filter((s) => !s.off);
 }
 
@@ -60,23 +58,7 @@ export function daysLabel(days: number[]): string {
     .join(" · ");
 }
 
-/** Pick the accent color for the current resolved status. Falls back to a
- *  calm indigo when the flag is off (matches the design's behavior). */
-export function accentFor(
-  palette: PaletteSlot[],
-  slot: string,
-  off: boolean,
-  theme: "dark" | "light"
-): string {
-  if (off) return theme === "dark" ? "#7C84FF" : "#5B63E0";
-  return hexOf(palette, slot);
-}
-
-/** Soften a vivid LED color for on-screen rendering.
- *  Pure values like #00FF00 are harsh on a monitor but look pleasant on the
- *  diffused physical flag; this dims + slightly de-saturates so the on-screen
- *  flag preview reads like the real thing. Display-only — never sent to the
- *  device. */
+/** Soften a vivid LED colour for on-screen rendering (display only). */
 export function screenSoften(hex: string): string {
   const c = hex.replace("#", "");
   if (c.length < 6) return hex;
@@ -84,7 +66,7 @@ export function screenSoften(hex: string): string {
   let g = parseInt(c.slice(2, 4), 16);
   let b = parseInt(c.slice(4, 6), 16);
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  const mix = 0.18; // pull toward the channel's luminance to cut neon harshness
+  const mix = 0.18;
   const dim = 0.9;
   r = Math.round((r * (1 - mix) + lum * mix) * dim);
   g = Math.round((g * (1 - mix) + lum * mix) * dim);
@@ -93,7 +75,51 @@ export function screenSoften(hex: string): string {
   return `#${h(r)}${h(g)}${h(b)}`;
 }
 
-/** WCAG-ish ink color for text on an accent background. */
+/** Scale a hex toward black by factor 0..1 (on-screen brightness preview). */
+export function applyBrightness(hex: string, factor: number): string {
+  const c = hex.replace("#", "");
+  if (c.length < 6) return hex;
+  const f = Math.max(0, Math.min(1, factor));
+  const r = Math.round(parseInt(c.slice(0, 2), 16) * f);
+  const g = Math.round(parseInt(c.slice(2, 4), 16) * f);
+  const b = Math.round(parseInt(c.slice(4, 6), 16) * f);
+  const h = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0");
+  return `#${h(r)}${h(g)}${h(b)}`;
+}
+
+export function hslToHex(h: number, s: number, l: number): string {
+  s /= 100;
+  l /= 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const to = (x: number) => Math.round(255 * x).toString(16).padStart(2, "0");
+  return "#" + to(f(0)) + to(f(8)) + to(f(4));
+}
+
+export function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  let c = hex.replace("#", "");
+  if (c.length < 6) c = "3dd68c";
+  const r = parseInt(c.slice(0, 2), 16) / 255;
+  const g = parseInt(c.slice(2, 4), 16) / 255;
+  const b = parseInt(c.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  let h = 0,
+    s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
+/** WCAG-ish ink colour for text/icons on a colour fill. */
 export function inkFor(hex: string): string {
   const c = hex.replace("#", "");
   if (c.length < 6) return "#ffffff";
@@ -101,5 +127,80 @@ export function inkFor(hex: string): string {
   const g = parseInt(c.slice(2, 4), 16) / 255;
   const b = parseInt(c.slice(4, 6), 16) / 255;
   const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return L > 0.6 ? "#1a1500" : "#ffffff";
+  return L > 0.6 ? "#10130f" : "#ffffff";
+}
+
+/* ---------- importance tiers (UI sugar over numeric priority) ---------- */
+
+export const OVERRIDE_PRIORITY = 50;
+
+export const TIERS: { id: Tier; label: string }[] = [
+  { id: "low", label: "Low" },
+  { id: "normal", label: "Normal" },
+  { id: "high", label: "High" },
+  { id: "critical", label: "Critical" },
+];
+
+const PRIORITY_BY_TIER: Record<Tier, number> = {
+  low: 20,
+  normal: 40,
+  high: 70,
+  critical: 90,
+};
+
+/** Map a 0..100 priority to a named tier. High/Critical sit above override. */
+export function tierOf(priority: number): Tier {
+  if (priority >= 80) return "critical";
+  if (priority >= 55) return "high";
+  if (priority >= 30) return "normal";
+  return "low";
+}
+
+export function priorityOf(tier: Tier): number {
+  return PRIORITY_BY_TIER[tier] ?? 40;
+}
+
+export function tierLabel(tier: Tier): string {
+  return TIERS.find((t) => t.id === tier)?.label ?? "Normal";
+}
+
+/* ---------- effects (the design's reduced set) ---------- */
+
+export const EFFECTS = [
+  { id: "solid", name: "Solid" },
+  { id: "fade", name: "Fade" },
+  { id: "strobe", name: "Strobe" },
+];
+
+export function effectType(effect?: Effect | null): string {
+  const t = effect?.type ?? "solid";
+  return EFFECTS.some((e) => e.id === t) ? t : "solid";
+}
+
+export function effectName(effect?: Effect | null): string {
+  const t = effectType(effect);
+  return EFFECTS.find((e) => e.id === t)?.name ?? "Solid";
+}
+
+/** Build a full Effect dict (engine normalizes, but keep the shape valid). */
+export function makeEffect(type: string, base?: Effect | null): Effect {
+  return {
+    type,
+    speed: base?.speed ?? 40,
+    wave_type: base?.wave_type ?? 1,
+    pattern_id: base?.pattern_id ?? 1,
+  };
+}
+
+/* ---------- trigger type → icon ---------- */
+
+export function triggerIcon(type: TriggerType): string {
+  switch (type) {
+    case "webcam":
+      return "webcam";
+    case "lock":
+      return "lock";
+    default:
+      return "mic";
+  }
 }

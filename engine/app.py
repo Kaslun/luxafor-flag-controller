@@ -29,7 +29,6 @@ from engine import mic, webcam
 from engine.config import ConfigError, config_from_dict, triggers_meta
 from engine.effects import as_payload as effects_payload
 from engine.logging_setup import get_logger
-from engine.palette import as_payload as palette_payload
 from engine.paths import log_path
 from engine.version import __version__
 
@@ -52,6 +51,7 @@ class PreviewBody(BaseModel):
 class ConfigBody(BaseModel):
     routines: list[dict] = []
     triggers: list[dict] = []
+    palette: list[dict] = []
     settings: dict = {}
 
 
@@ -137,7 +137,9 @@ def create_app(engine) -> FastAPI:
 
     @app.get("/api/palette")
     def get_palette():
-        return palette_payload()
+        # the live, user-editable palette (lives in config); kept as its own
+        # endpoint for back-compat with the UI's one-time palette load
+        return engine.config.to_dict()["palette"]
 
     @app.get("/api/effects")
     def get_effects():

@@ -85,13 +85,33 @@ def is_hex(value: str) -> bool:
 
 
 def is_color(value: str) -> bool:
-    """True for a known slot name or a valid #RRGGBB custom color."""
-    return is_slot(value) or is_hex(value)
+    """True for a valid color reference.
+
+    A value is either a ``#RRGGBB`` hex or a palette *slot reference*. Since
+    the palette is now user-editable (slots live in the config, not this
+    module), any non-empty, non-``#`` token is accepted as a slot reference
+    and resolved against the live config palette at device-write time (with a
+    black fallback if the slot was since deleted). Values starting with ``#``
+    must still be valid hex.
+    """
+    if not isinstance(value, str) or not value:
+        return False
+    if value.startswith("#"):
+        return is_hex(value)
+    return True
 
 
 def _parse_hex(value: str) -> tuple[int, int, int]:
     h = value.lstrip("#")
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def hex_to_rgb(value: str) -> tuple[int, int, int]:
+    """Parse ``#RRGGBB`` (or ``RRGGBB``) to an RGB triple; black on failure."""
+    try:
+        return _parse_hex(value)
+    except (ValueError, IndexError):
+        return (0, 0, 0)
 
 
 def rgb_of(slot: str) -> tuple[int, int, int]:

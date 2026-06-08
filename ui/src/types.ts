@@ -18,12 +18,6 @@ export interface Effect {
   pattern_id: number;
 }
 
-export interface ManualOverride {
-  color: string;
-  expiry: string | null; // ISO timestamp, or null = until cleared
-  effect?: Effect | null;
-}
-
 export interface EffectsMeta {
   types: string[];
   wave_types: { id: number; name: string }[];
@@ -32,6 +26,12 @@ export interface EffectsMeta {
   speed_max: number;
   default: Effect;
   color_ignored_types: string[];
+}
+
+export interface ManualOverride {
+  color: string;
+  expiry: string | null;
+  effect?: Effect | null;
 }
 
 export interface UpdateAvailable {
@@ -44,6 +44,16 @@ export interface ConflictDetected {
   luxafor_v2_startup: boolean;
 }
 
+/** A user-editable template colour (lives in config.palette). */
+export interface PaletteColor {
+  slot: string;
+  name: string;
+  hex: string; // display hex (#RRGGBB), or ignored when off
+  off: boolean;
+  led?: string | null; // optional LED-tuned hex written to the device
+}
+export type PaletteSlot = PaletteColor; // back-compat alias
+
 export type TriggerType = "mic" | "mic_app" | "webcam" | "lock";
 
 export interface Trigger {
@@ -51,8 +61,8 @@ export interface Trigger {
   name: string;
   enabled: boolean;
   type: TriggerType;
-  color: string; // slot name or "#RRGGBB"
-  priority: number; // 0..100, higher wins; 50 == manual override
+  color: string;
+  priority: number; // 0..100; mapped to/from importance tiers in the UI
   params: { app?: string };
   effect?: Effect;
 }
@@ -81,6 +91,31 @@ export interface Signals {
   webcam_capturers?: string[];
 }
 
+export interface Routine {
+  id: string;
+  name: string;
+  enabled: boolean;
+  days: number[]; // Mon=0 .. Sun=6
+  start: string; // "HH:MM"
+  end: string; // "HH:MM"
+  color: string;
+  effect?: Effect;
+}
+
+export interface Settings {
+  available_color: string;
+  off_behavior: string; // "off" | "dim" | <slot>
+  heartbeat_interval_seconds: number;
+  brightness: number; // 10..100
+}
+
+export interface Config {
+  routines: Routine[];
+  triggers: Trigger[];
+  palette: PaletteColor[];
+  settings: Settings;
+}
+
 export interface State {
   color: string;
   routine: string;
@@ -101,33 +136,4 @@ export interface State {
   updated_at: string;
 }
 
-export interface Routine {
-  id: string;
-  name: string;
-  enabled: boolean;
-  days: number[]; // Mon=0 .. Sun=6
-  start: string; // "HH:MM"
-  end: string; // "HH:MM"
-  color: string; // palette slot name or "#RRGGBB"
-  effect?: Effect;
-}
-
-export interface Settings {
-  available_color: string;
-  off_behavior: string; // "off" | "dim" | <slot>
-  heartbeat_interval_seconds: number;
-}
-
-export interface Config {
-  routines: Routine[];
-  triggers: Trigger[];
-  settings: Settings;
-}
-
-export interface PaletteSlot {
-  slot: string;
-  name: string;
-  hex: string; // "#RRGGBB" or "off"
-  meaning: string;
-  off: boolean;
-}
+export type Tier = "low" | "normal" | "high" | "critical";

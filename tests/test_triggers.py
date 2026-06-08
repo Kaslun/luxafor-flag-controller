@@ -75,11 +75,20 @@ def test_rejects_duplicate_trigger_ids():
         )
 
 
-def test_rejects_bad_color():
+def test_rejects_bad_hex_color():
+    # a '#'-prefixed value must be valid hex; bad hex still fails
     with pytest.raises(ConfigError):
         config_from_dict(
-            {"routines": [], "triggers": [_trigger(color="chartreuse")], "settings": {}}
+            {"routines": [], "triggers": [_trigger(color="#12345")], "settings": {}}
         )
+
+
+def test_accepts_slot_reference_color():
+    # non-'#' tokens are slot references (palette is editable), accepted as-is
+    cfg = config_from_dict(
+        {"routines": [], "triggers": [_trigger(color="anything")], "settings": {}}
+    )
+    assert cfg.triggers[0].color == "anything"
 
 
 def test_rejects_bad_effect():

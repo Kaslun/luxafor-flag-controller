@@ -32,7 +32,7 @@ from engine.config import Config, Trigger, load_config, save_config
 from engine.device import Flag
 from engine.history import History
 from engine.logging_setup import get_logger
-from engine.palette import dim_rgb, is_color, resolve_rgb
+from engine.palette import dim_rgb, hex_to_rgb, is_color, is_hex
 from engine.resolver import ResolvedStatus, resolve
 from engine.state import State
 
@@ -165,17 +165,40 @@ class BeaconEngine:
 
     # ------------------------------------------------------------ resolve/write
 
+    def _palette_rgb(self, color: str) -> tuple[int, int, int]:
+        """Resolve a color value (hex or palette slot) to device RGB.
+
+        Slots resolve against the live, user-editable config palette using the
+        LED-tuned ``led`` hex when present (else the display ``hex``). Unknown
+        slots — e.g. one deleted while still referenced — fall back to black.
+        """
+        if is_hex(color):
+            return hex_to_rgb(color)
+        for pc in self.config.palette:
+            if pc.slot == color:
+                return (0, 0, 0) if pc.off else hex_to_rgb(pc.led or pc.hex)
+        return (0, 0, 0)
+
+    def _scaled(self, rgb: tuple[int, int, int]) -> tuple[int, int, int]:
+        """Scale RGB by the brightness setting (10..100 -> 0.1..1.0)."""
+        f = max(0.0, min(1.0, self.config.settings.brightness / 100.0))
+        return tuple(max(0, min(255, round(c * f))) for c in rgb)  # type: ignore[return-value]
+
     def _target_report(self, resolved: ResolvedStatus) -> list[int]:
         """The 8-byte HID report for the resolved status.
 
-        off/paused/disconnected -> solid black; dim -> solid dimmed
-        available color; otherwise the color's RGB with its effect applied.
+        off/paused/disconnected -> solid black; dim -> dimmed resting color;
+        otherwise the color's RGB (brightness-scaled) with its effect applied.
         """
         if resolved.off:
             return effects.build_report((0, 0, 0), None)
         if resolved.dim:
-            return effects.build_report(dim_rgb(resolve_rgb(resolved.color)), None)
-        return effects.build_report(resolve_rgb(resolved.color), resolved.effect)
+            return effects.build_report(
+                self._scaled(dim_rgb(self._palette_rgb(resolved.color))), None
+            )
+        return effects.build_report(
+            self._scaled(self._palette_rgb(resolved.color)), resolved.effect
+        )
 
     def _apply_resolved(self, resolved: ResolvedStatus, now: dt.datetime) -> None:
         with self.state.lock:

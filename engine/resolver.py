@@ -34,7 +34,6 @@ import datetime as dt
 from dataclasses import dataclass
 
 from engine.config import OVERRIDE_PRIORITY, Config, Routine
-from engine.palette import name_of
 
 
 @dataclass
@@ -85,17 +84,6 @@ def active_routine(routines: list[Routine], now: dt.datetime) -> Routine | None:
     return best
 
 
-def _format_override_reason(color: str, expiry: str | None, now: dt.datetime) -> str:
-    if expiry is None:
-        return f"Manual: {name_of(color)} until you clear it."
-    try:
-        until = dt.datetime.fromisoformat(expiry)
-        label = until.strftime("%I:%M%p").lstrip("0").lower()
-    except ValueError:
-        label = "soon"
-    return f"Manual: {name_of(color)} until {label}."
-
-
 def resolve(now: dt.datetime, state, config: Config) -> ResolvedStatus:
     """Pure resolution. ``state`` is the live engine State (duck-typed:
     needs ``paused``, ``device_connected``, ``in_call``, ``manual_override``).
@@ -137,15 +125,13 @@ def resolve(now: dt.datetime, state, config: Config) -> ResolvedStatus:
     ):
         return ResolvedStatus(
             best.get("id", "trigger"), best["color"],
-            f"{best.get('name') or 'Trigger'} — active.",
+            best.get("name") or "Trigger",
             kind="trigger", effect=best.get("effect"),
         )
 
     if ov:
-        color = ov.get("color")
-        expiry = ov.get("expiry")
         return ResolvedStatus(
-            "override", color, _format_override_reason(color, expiry, now),
+            "override", ov.get("color"), "Manual",
             kind="override", effect=ov.get("effect"),
         )
 
@@ -153,8 +139,7 @@ def resolve(now: dt.datetime, state, config: Config) -> ResolvedStatus:
     r = active_routine(config.routines, now)
     if r:
         return ResolvedStatus(
-            "routine", r.color,
-            f"{r.name} ({_fmt12(r.start)}–{_fmt12(r.end)}).",
+            "routine", r.color, r.name or "Routine",
             kind="routine", effect=getattr(r, "effect", None),
         )
 
@@ -162,16 +147,13 @@ def resolve(now: dt.datetime, state, config: Config) -> ResolvedStatus:
     ob = s.off_behavior
     if ob == "off":
         return ResolvedStatus(
-            "available", "off", "Off — no routine active right now.",
-            kind="off", off=True,
+            "available", "off", "Off-hours", kind="off", off=True,
         )
     if ob == "dim":
         return ResolvedStatus(
-            "available", s.available_color, "Dimmed — available, nothing scheduled.",
-            kind="dim", dim=True,
+            "available", s.available_color, "Resting", kind="dim", dim=True,
         )
     # off_behavior is an explicit slot name
     return ResolvedStatus(
-        "available", s.available_color, "Available — nothing scheduled.",
-        kind="available",
+        "available", s.available_color, "At your desk", kind="available",
     )

@@ -1,37 +1,37 @@
 import { Icon } from "../icons";
+import type { Theme } from "../theme";
 
 export function Header({
-  accent,
   theme,
   version,
   onToggleTheme,
+  onOpenPalette,
   onOpenSettings,
 }: {
-  accent: string;
-  theme: "dark" | "light";
+  theme: Theme;
   version: string;
   onToggleTheme: () => void;
+  onOpenPalette: () => void;
   onOpenSettings: () => void;
 }) {
   return (
-    <div className="header">
-      <div className="appmark">
-        <span className="glyph" style={{ color: accent }}>
-          <Icon name="beacon" size={18} />
+    <div className="hd">
+      <div className="mark">
+        <span className="glyph">
+          <Icon name="beacon" size={20} />
         </span>
-        <span className="title">
-          <b>Beacon</b>&nbsp; for Luxafor
-        </span>
-        <span className="mono" style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 4 }}>
-          v{version}
-        </span>
+        <span className="wordmark">Beacon</span>
+        <span className="ver">— v{version}</span>
       </div>
       <div className="spacer" />
-      <button className="tbtn" onClick={onToggleTheme} aria-label="toggle theme">
-        <Icon name={theme === "dark" ? "sun" : "moon"} size={15} />
+      <button className="tbtn" title="Colours" onClick={onOpenPalette}>
+        <Icon name="palette" size={17} />
       </button>
-      <button className="tbtn" onClick={onOpenSettings} aria-label="settings">
-        <Icon name="gear" size={16} />
+      <button className="tbtn" title="Theme" onClick={onToggleTheme}>
+        <Icon name={theme === "dark" ? "sun" : "moon"} size={16} />
+      </button>
+      <button className="tbtn" title="Settings" onClick={onOpenSettings}>
+        <Icon name="gear" size={17} />
       </button>
     </div>
   );

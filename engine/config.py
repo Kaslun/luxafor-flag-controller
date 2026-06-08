@@ -20,9 +20,16 @@ from pathlib import Path
 from engine.effects import EffectError, normalize_effect
 from engine.logging_setup import get_logger
 from engine.paths import config_path
-from engine.palette import is_color
+from engine.palette import PALETTE, is_color, is_hex
 
 log = get_logger()
+
+BRIGHTNESS_MIN, BRIGHTNESS_MAX = 10, 100
+
+
+def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+    r, g, b = rgb
+    return f"#{r:02X}{g:02X}{b:02X}"
 
 
 class ConfigError(ValueError):
@@ -56,6 +63,24 @@ def triggers_meta() -> dict:
 
 
 @dataclass
+class PaletteColor:
+    """A user-editable template colour.
+
+    ``hex`` is the on-screen/display colour. ``led`` is an optional LED-tuned
+    hex written to the physical flag instead of ``hex`` (saturated RGB LEDs
+    render some display colours poorly); it defaults to ``hex`` and is dropped
+    when the user recolours a slot. ``off`` marks the special locked "lights
+    off" slot.
+    """
+
+    slot: str
+    name: str
+    hex: str
+    off: bool = False
+    led: str | None = None
+
+
+@dataclass
 class Trigger:
     id: str
     name: str
@@ -84,20 +109,38 @@ class Settings:
     available_color: str = "available"
     off_behavior: str = "off"  # "off" | "dim" | <slot name>
     heartbeat_interval_seconds: int = 60
+    brightness: int = 80  # 10..100, scales the device colour
 
 
 @dataclass
 class Config:
     routines: list[Routine] = field(default_factory=list)
     triggers: list[Trigger] = field(default_factory=list)
+    palette: list[PaletteColor] = field(default_factory=list)
     settings: Settings = field(default_factory=Settings)
 
     def to_dict(self) -> dict:
         return {
             "routines": [asdict(r) for r in self.routines],
             "triggers": [asdict(t) for t in self.triggers],
+            "palette": [asdict(p) for p in self.palette],
             "settings": asdict(self.settings),
         }
+
+
+def default_palette() -> list[PaletteColor]:
+    """Seed the editable palette from the design's closed slot set, carrying
+    the LED-tuned device colours so the physical flag reads correctly out of
+    the box (the ``off`` slot stays locked)."""
+    out: list[PaletteColor] = []
+    for s in PALETTE:
+        if s.off:
+            out.append(PaletteColor("off", "Off", "#000000", off=True))
+        else:
+            out.append(
+                PaletteColor(s.slot, s.name, s.hex, led=_rgb_to_hex(s.led_rgb))
+            )
+    return out
 
 
 def default_triggers() -> list[Trigger]:
@@ -118,6 +161,7 @@ def default_config() -> Config:
             ),
         ],
         triggers=default_triggers(),
+        palette=default_palette(),
         settings=Settings(),
     )
 
@@ -198,6 +242,39 @@ def _trigger_from_dict(d: dict) -> Trigger:
     return Trigger(tid, name, enabled, ttype, color, priority, params, effect)
 
 
+def _palette_from_dict(d: dict) -> PaletteColor:
+    try:
+        slot = str(d["slot"])
+        name = str(d.get("name", ""))
+        off = bool(d.get("off", False))
+    except (KeyError, TypeError, ValueError) as e:
+        raise ConfigError(f"malformed palette colour: {e}")
+    if off:
+        return PaletteColor(slot, name or "Off", "#000000", off=True)
+    hexv = str(d.get("hex", ""))
+    if not is_hex(hexv):
+        raise ConfigError(f"palette {slot!r}: invalid hex {hexv!r}")
+    led = d.get("led")
+    if led is not None:
+        led = str(led)
+        if not is_hex(led):
+            raise ConfigError(f"palette {slot!r}: invalid led hex {led!r}")
+    return PaletteColor(slot, name, hexv if hexv.startswith("#") else "#" + hexv,
+                        off=False, led=led)
+
+
+def _parse_palette(palette_in) -> list[PaletteColor]:
+    if not isinstance(palette_in, list):
+        raise ConfigError("palette must be a list")
+    colors = [_palette_from_dict(c) for c in palette_in]
+    slots = [c.slot for c in colors]
+    if len(slots) != len(set(slots)):
+        raise ConfigError("palette slots must be unique")
+    if sum(1 for c in colors if c.off) != 1:
+        raise ConfigError("palette must contain exactly one 'off' colour")
+    return colors
+
+
 def _migrate_triggers(settings_d: dict) -> list[Trigger]:
     """Seed triggers from legacy call_*/lock_* settings for configs that
     predate the triggers list. Mirrors the prior built-in behavior exactly:
@@ -225,6 +302,11 @@ def _settings_from_dict(d: dict) -> Settings:
     s.heartbeat_interval_seconds = int(
         d.get("heartbeat_interval_seconds", s.heartbeat_interval_seconds)
     )
+    try:
+        s.brightness = int(d.get("brightness", s.brightness))
+    except (TypeError, ValueError):
+        raise ConfigError("brightness must be an integer")
+    s.brightness = max(BRIGHTNESS_MIN, min(BRIGHTNESS_MAX, s.brightness))
 
     if not is_color(s.available_color):
         raise ConfigError(f"invalid available_color {s.available_color!r}")
@@ -265,7 +347,16 @@ def config_from_dict(d: dict) -> Config:
     if len(tids) != len(set(tids)):
         raise ConfigError("trigger ids must be unique")
 
-    return Config(routines=routines, triggers=triggers, settings=settings)
+    # Palette is authoritative when present; otherwise seed the defaults
+    # (transparent migration for configs that predate the editable palette).
+    if "palette" in d:
+        palette = _parse_palette(d.get("palette") or [])
+    else:
+        palette = default_palette()
+
+    return Config(
+        routines=routines, triggers=triggers, palette=palette, settings=settings
+    )
 
 
 # ---------------------------------------------------------------- persistence
