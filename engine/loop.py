@@ -28,6 +28,7 @@ import threading
 import time
 
 from engine import autostart, conflict, effects, mic, selfupdate, session, updater, webcam
+from engine.hotkeys import HotkeyManager
 from engine.config import Config, Trigger, load_config, save_config
 from engine.device import Flag
 from engine.history import History
@@ -67,7 +68,21 @@ class BeaconEngine:
         # history bookkeeping
         self._last_logged: tuple[str, str, str] | None = None
 
+        # hotkey triggers toggled on (by trigger id) + their global listener
+        self._hotkey_on: set[str] = set()
+        self._hotkey_lock = threading.Lock()
+        self.hotkeys = HotkeyManager(self)
+
     # ------------------------------------------------------------ commands
+
+    def toggle_hotkey(self, trigger_id: str) -> None:
+        """Flip a hotkey trigger on/off (called from the hotkey thread)."""
+        with self._hotkey_lock:
+            if trigger_id in self._hotkey_on:
+                self._hotkey_on.discard(trigger_id)
+            else:
+                self._hotkey_on.add(trigger_id)
+        self.request_tick()
 
     def request_tick(self) -> None:
         """Wake the loop for an immediate re-resolve (thread-safe)."""
@@ -124,6 +139,12 @@ class BeaconEngine:
     def replace_config(self, cfg: Config) -> None:
         self.config = cfg
         save_config(cfg)
+        # drop toggled-on state for hotkeys that no longer exist/are disabled,
+        # then re-register the global hotkeys for the new config
+        valid = {t.id for t in cfg.triggers if t.type == "hotkey" and t.enabled}
+        with self._hotkey_lock:
+            self._hotkey_on &= valid
+        self.hotkeys.reload()
         self.request_tick()
 
     def set_autostart(self, enabled: bool) -> bool:
@@ -221,6 +242,9 @@ class BeaconEngine:
             return mic.capturer_matches(
                 t.params.get("app", ""), signals["mic_capturers"]
             )
+        if t.type == "hotkey":
+            with self._hotkey_lock:
+                return t.id in self._hotkey_on
         return False
 
     def _evaluate_triggers(self) -> tuple[dict, list[dict]]:
@@ -348,6 +372,7 @@ class BeaconEngine:
     async def run(self) -> None:
         self._loop = asyncio.get_running_loop()
         log.info("engine loop starting")
+        self.hotkeys.start()  # global keyboard-shortcut triggers
 
         last_conflict = 0.0
         last_update = 0.0
@@ -412,6 +437,10 @@ class BeaconEngine:
 
     def shutdown(self) -> None:
         """Final cleanup — turn the flag off, close handles."""
+        try:
+            self.hotkeys.stop()
+        except Exception:
+            pass
         try:
             self.device.close()
         except Exception:

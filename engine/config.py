@@ -39,7 +39,7 @@ class ConfigError(ValueError):
 # Trigger condition types. Each maps to a detector evaluated each tick
 # (see engine.loop). "mic" and "lock" are the unified successors of the old
 # call_detection / lock_detection settings.
-TRIGGER_TYPES = ("mic", "mic_app", "webcam", "lock")
+TRIGGER_TYPES = ("mic", "mic_app", "webcam", "lock", "hotkey")
 
 # Manual override resolves at this priority. A trigger wins over a manual
 # override only if its priority is strictly greater (see engine.resolver).
@@ -51,10 +51,11 @@ def triggers_meta() -> dict:
     """Trigger vocabulary for the UI (GET /api/triggers/meta)."""
     return {
         "types": [
-            {"id": "mic", "name": "In a call (mic in use)", "needs_app": False},
-            {"id": "mic_app", "name": "Specific app on mic", "needs_app": True},
-            {"id": "webcam", "name": "Webcam in use", "needs_app": False},
-            {"id": "lock", "name": "Screen locked", "needs_app": False},
+            {"id": "mic", "name": "In a call (mic in use)", "needs_app": False, "needs_hotkey": False},
+            {"id": "mic_app", "name": "Specific app on mic", "needs_app": True, "needs_hotkey": False},
+            {"id": "webcam", "name": "Webcam in use", "needs_app": False, "needs_hotkey": False},
+            {"id": "lock", "name": "Screen locked", "needs_app": False, "needs_hotkey": False},
+            {"id": "hotkey", "name": "Keyboard shortcut", "needs_app": False, "needs_hotkey": True},
         ],
         "priority_min": PRIORITY_MIN,
         "priority_max": PRIORITY_MAX,

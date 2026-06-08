@@ -31,6 +31,8 @@ const ICONS: Record<string, string> = {
   palette:
     '<rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/>',
   power: '<path d="M12 4v8M7 7a7 7 0 1 0 10 0"/>',
+  keyboard:
+    '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7.5 14h9"/>',
 };
 
 export type IconName = keyof typeof ICONS;

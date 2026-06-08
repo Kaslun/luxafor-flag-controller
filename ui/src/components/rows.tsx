@@ -14,6 +14,8 @@ import {
   priorityOf,
   tierLabel,
   triggerIcon,
+  hotkeyLabel,
+  captureHotkey,
 } from "../model";
 import { api } from "../api";
 import type { PaletteColor, Routine, Tier, Trigger, TriggerMeta } from "../types";
@@ -25,6 +27,45 @@ function swatchStyle(hex: string): React.CSSProperties {
 function shortApp(raw: string): string {
   const parts = raw.split(/[#\\/]/);
   return parts[parts.length - 1] || raw;
+}
+
+/** "Press your combo" capture field for hotkey triggers. */
+function HotkeyCapture({
+  value,
+  onChange,
+}: {
+  value: Trigger["params"];
+  onChange: (p: Trigger["params"]) => void;
+}) {
+  const [listening, setListening] = useState(false);
+  useEffect(() => {
+    if (!listening) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const combo = captureHotkey(e);
+      if (combo) {
+        onChange(combo);
+        setListening(false);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [listening, onChange]);
+
+  return (
+    <button
+      type="button"
+      className={"colorbtn" + (listening ? " listening" : "")}
+      onClick={() => setListening((l) => !l)}
+    >
+      <Icon name="keyboard" size={16} />
+      {listening ? "Press a key combo…" : hotkeyLabel(value)}
+      <span className="muted ar" style={{ fontSize: 12 }}>
+        {listening ? "listening" : "change"}
+      </span>
+    </button>
+  );
 }
 
 export function TriggerRow({
@@ -52,6 +93,7 @@ export function TriggerRow({
   const hex = hexOf(palette, t.color);
   const typeMeta = triggerMeta.types.find((x) => x.id === t.type) || triggerMeta.types[0];
   const needsApp = typeMeta?.needs_app ?? false;
+  const needsHotkey = typeMeta?.needs_hotkey ?? false;
   const tier = tierOf(t.priority);
   const set = (patch: Partial<Trigger>) => onChange({ ...t, ...patch });
 
@@ -82,7 +124,7 @@ export function TriggerRow({
           <div className={"r-name" + (t.name ? "" : " placeholder")}>{t.name || "Untitled"}</div>
           <div className="r-meta">
             <Icon name={triggerIcon(t.type)} size={13} />
-            <span>{typeMeta?.name}</span>
+            <span>{needsHotkey ? hotkeyLabel(t.params) : typeMeta?.name}</span>
             {active && (
               <>
                 <span className="sep">·</span>
@@ -140,6 +182,17 @@ export function TriggerRow({
                 {detected.length
                   ? "On mic now: " + detected.map(shortApp).join(", ")
                   : "No apps are using the microphone right now."}
+              </p>
+            </div>
+          )}
+
+          {needsHotkey && (
+            <div className="field">
+              <label>— shortcut</label>
+              <HotkeyCapture value={t.params} onChange={(p) => set({ params: p })} />
+              <p className="hint">
+                Press it anywhere to toggle this status on and off. Needs a
+                modifier (Ctrl / Alt / Shift / Win) plus a key.
               </p>
             </div>
           )}

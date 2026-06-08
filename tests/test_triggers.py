@@ -30,7 +30,7 @@ def _trigger(**kw) -> dict:
 # ----------------------------------------------------------- validation
 
 def test_accepts_all_known_types():
-    for t in ("mic", "mic_app", "webcam", "lock"):
+    for t in ("mic", "mic_app", "webcam", "lock", "hotkey"):
         params = {"app": "teams"} if t == "mic_app" else {}
         cfg = config_from_dict(
             {"routines": [], "triggers": [_trigger(type=t, params=params)], "settings": {}}
@@ -165,7 +165,43 @@ def test_capturer_matches_empty_never_matches():
 def test_triggers_meta_shape():
     m = triggers_meta()
     type_ids = {t["id"] for t in m["types"]}
-    assert type_ids == {"mic", "mic_app", "webcam", "lock"}
+    assert type_ids == {"mic", "mic_app", "webcam", "lock", "hotkey"}
     assert m["override_priority"] == 50
     needs = {t["id"]: t["needs_app"] for t in m["types"]}
     assert needs["mic_app"] is True and needs["mic"] is False
+    hk = next(t for t in m["types"] if t["id"] == "hotkey")
+    assert hk["needs_hotkey"] is True
+
+
+def test_hotkey_trigger_toggle():
+    from engine.loop import BeaconEngine
+
+    eng = BeaconEngine()
+    eng.config = config_from_dict(
+        {
+            "routines": [],
+            "triggers": [
+                {
+                    "id": "hk",
+                    "name": "DND",
+                    "enabled": True,
+                    "type": "hotkey",
+                    "color": "busy",
+                    "priority": 90,
+                    "params": {"ctrl": True, "alt": True, "key": "B", "vk": 66},
+                }
+            ],
+            "settings": {},
+        }
+    )
+    # not toggled -> not active
+    _, active = eng._evaluate_triggers()
+    assert [a["id"] for a in active if a["id"] == "hk"] == []
+    # press -> active
+    eng.toggle_hotkey("hk")
+    _, active = eng._evaluate_triggers()
+    assert [a["id"] for a in active] == ["hk"]
+    # press again -> off
+    eng.toggle_hotkey("hk")
+    _, active = eng._evaluate_triggers()
+    assert [a["id"] for a in active if a["id"] == "hk"] == []

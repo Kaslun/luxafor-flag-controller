@@ -54,7 +54,16 @@ export interface PaletteColor {
 }
 export type PaletteSlot = PaletteColor; // back-compat alias
 
-export type TriggerType = "mic" | "mic_app" | "webcam" | "lock";
+export type TriggerType = "mic" | "mic_app" | "webcam" | "lock" | "hotkey";
+
+export interface HotkeyParams {
+  ctrl?: boolean;
+  alt?: boolean;
+  shift?: boolean;
+  win?: boolean;
+  key?: string; // display key, e.g. "B", "F5"
+  vk?: number; // Win32 virtual-key code
+}
 
 export interface Trigger {
   id: string;
@@ -63,7 +72,7 @@ export interface Trigger {
   type: TriggerType;
   color: string;
   priority: number; // 0..100; mapped to/from importance tiers in the UI
-  params: { app?: string };
+  params: { app?: string } & HotkeyParams;
   effect?: Effect;
 }
 
@@ -77,7 +86,7 @@ export interface ActiveTrigger {
 }
 
 export interface TriggerMeta {
-  types: { id: TriggerType; name: string; needs_app: boolean }[];
+  types: { id: TriggerType; name: string; needs_app: boolean; needs_hotkey?: boolean }[];
   priority_min: number;
   priority_max: number;
   override_priority: number;
