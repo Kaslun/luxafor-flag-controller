@@ -23,7 +23,7 @@ import socket
 import sys
 import threading
 import webbrowser
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 import uvicorn
 
@@ -105,6 +105,48 @@ def _open_browser_soon(url: str, delay: float = 1.5) -> None:
     threading.Timer(delay, _go).start()
 
 
+def _client_alive(port: int) -> bool:
+    try:
+        with urlopen(f"http://{HOST}:{port}/api/clients", timeout=0.75) as r:
+            return bool(json.loads(r.read()).get("alive"))
+    except Exception:
+        return False
+
+
+def _handoff_to_existing(port: int) -> None:
+    """A second launch: if a tab is already open, nudge it forward instead of
+    spawning a duplicate; otherwise open one."""
+    if _client_alive(port):
+        try:
+            urlopen(Request(f"http://{HOST}:{port}/api/focus", method="POST"), timeout=0.75)
+        except Exception:
+            pass
+    else:
+        try:
+            webbrowser.open(f"http://{HOST}:{port}/", new=0)
+        except Exception:
+            pass
+
+
+def _open_dashboard_when_idle(engine, url: str, grace: float = 3.5) -> None:
+    """Open the dashboard on startup — but only if no UI tab is already open.
+
+    A previously-open tab reconnects within a poll interval when the engine
+    (re)starts on the same port; waiting one grace window lets us detect it and
+    skip opening a duplicate. If a tab is there, nudge it forward instead.
+    """
+    def _go():
+        try:
+            if engine.client_alive():
+                engine.request_focus()
+            else:
+                webbrowser.open(url)
+        except Exception:
+            pass
+
+    threading.Timer(grace, _go).start()
+
+
 def main() -> None:
     log = setup_logging()
     log.info("Beacon starting")
@@ -115,12 +157,7 @@ def main() -> None:
         existing = _existing_instance_port()
         log.info("another instance is running (port=%s); opening it", existing)
         if existing is not None:
-            try:
-                # new=0 asks the browser to reuse an existing window/tab where
-                # it can rather than always spawning a new one
-                webbrowser.open(f"http://{HOST}:{existing}/", new=0)
-            except Exception:
-                pass
+            _handoff_to_existing(existing)
         return
 
     args = sys.argv[1:]
@@ -137,12 +174,11 @@ def main() -> None:
 
     app = create_app(engine)
     start_tray(engine)
-    # Open the dashboard on startup — every launch, including a sign-in
-    # autostart launch (a second launch reuses this instance, above, rather
-    # than starting another). force_show/first_run/autostart_launch are kept
-    # for logging only.
-    _ = (force_show, first_run, autostart_launch)
-    _open_browser_soon(url)
+    # Open the dashboard on startup — but skip it if a UI tab is already open
+    # (e.g. a previous tab that reconnects when we rebind the same port), so we
+    # don't drop a duplicate tab into the user's focused window.
+    _ = (force_show, first_run, autostart_launch)  # kept for logging only
+    _open_dashboard_when_idle(engine, url)
 
     log.info("serving on %s (first_run=%s show=%s)", url, first_run, force_show)
     try:

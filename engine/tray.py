@@ -170,6 +170,10 @@ class TrayController:
         self.engine.set_paused(not self._is_paused())
 
     def _open(self, icon, item):
+        # if a tab is already open, bring it forward instead of duplicating
+        if self.engine.client_alive():
+            self.engine.request_focus()
+            return
         port = self.engine.state.port or 54741
         webbrowser.open(f"http://127.0.0.1:{port}/")
 

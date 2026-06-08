@@ -73,7 +73,27 @@ class BeaconEngine:
         self._hotkey_lock = threading.Lock()
         self.hotkeys = HotkeyManager(self)
 
+        # last time a UI tab polled us — used to avoid spawning duplicate tabs
+        self._last_client: float | None = None
+
     # ------------------------------------------------------------ commands
+
+    def note_client(self) -> None:
+        """Record that a UI tab just talked to us (called from GET /api/state)."""
+        self._last_client = time.monotonic()
+
+    def client_alive(self, within_seconds: float = 8.0) -> bool:
+        """True if a UI tab has polled within the window (a tab is open)."""
+        return (
+            self._last_client is not None
+            and (time.monotonic() - self._last_client) <= within_seconds
+        )
+
+    def request_focus(self) -> int:
+        """Ask any open UI tab to bring itself forward (best-effort)."""
+        with self.state.lock:
+            self.state.focus_seq += 1
+            return self.state.focus_seq
 
     def toggle_hotkey(self, trigger_id: str) -> None:
         """Flip a hotkey trigger on/off (called from the hotkey thread)."""

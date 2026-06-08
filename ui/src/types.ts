@@ -141,6 +141,7 @@ export interface State {
   update_available: UpdateAvailable | null;
   conflict_detected: ConflictDetected | null;
   autostart_enabled: boolean;
+  focus_seq: number;
   version: string;
   updated_at: string;
 }

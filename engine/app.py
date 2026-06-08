@@ -120,7 +120,17 @@ def create_app(engine) -> FastAPI:
 
     @app.get("/api/state")
     def get_state():
+        engine.note_client()  # a UI tab is alive (used to avoid duplicate tabs)
         return engine.state.snapshot()
+
+    @app.get("/api/clients")
+    def get_clients():
+        return {"alive": engine.client_alive()}
+
+    @app.post("/api/focus")
+    def post_focus():
+        # ask an already-open UI tab to bring itself forward
+        return {"focus_seq": engine.request_focus()}
 
     @app.get("/api/config")
     def get_config():

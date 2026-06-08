@@ -92,3 +92,16 @@ def test_loop_resolves_palette_and_brightness(monkeypatch):
     assert eng._palette_rgb("#00FF00") == (0, 255, 0)
     # brightness 50 halves the channels
     assert eng._scaled((200, 100, 0)) == (100, 50, 0)
+
+
+def test_client_tracking_and_focus():
+    from engine.loop import BeaconEngine
+
+    eng = BeaconEngine()
+    assert eng.client_alive() is False  # nobody has polled yet
+    eng.note_client()
+    assert eng.client_alive() is True
+    assert eng.client_alive(within_seconds=0) is False  # window too tight
+    before = eng.state.focus_seq
+    assert eng.request_focus() == before + 1
+    assert eng.state.snapshot()["focus_seq"] == before + 1

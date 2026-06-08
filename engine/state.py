@@ -55,6 +55,7 @@ class State:
     autostart_enabled: bool = False  # registered in the per-user Run key
     version: str = __version__  # running engine version
     port: int = 0  # bound localhost port (for tray "Open Beacon")
+    focus_seq: int = 0  # bumped to ask an open UI tab to bring itself forward
 
     updated_at: dt.datetime = field(default_factory=dt.datetime.now)
 
@@ -85,6 +86,7 @@ class State:
                     dict(self.conflict_detected) if self.conflict_detected else None
                 ),
                 "autostart_enabled": self.autostart_enabled,
+                "focus_seq": self.focus_seq,
                 "version": self.version,
                 "updated_at": self.updated_at.isoformat(),
             }

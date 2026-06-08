@@ -73,6 +73,7 @@ export default function App() {
 
   const putTimer = useRef<number | null>(null);
   const prevConflict = useRef(false);
+  const prevFocusSeq = useRef<number | null>(null);
 
   useEffect(() => {
     api.getConfig().then(setConfig).catch((e) => setErr(String(e)));
@@ -96,6 +97,21 @@ export default function App() {
     if (running && !prevConflict.current) setShowConflict(true);
     prevConflict.current = running;
   }, [state?.conflict_detected]);
+
+  // a second launch (or tray "Open Beacon") bumps focus_seq when a tab is
+  // already open — bring this tab forward instead of spawning a duplicate.
+  useEffect(() => {
+    const seq = state?.focus_seq;
+    if (seq == null) return;
+    if (prevFocusSeq.current != null && seq > prevFocusSeq.current) {
+      try {
+        window.focus();
+      } catch {
+        /* best-effort: browsers may ignore cross-window focus */
+      }
+    }
+    prevFocusSeq.current = seq;
+  }, [state?.focus_seq]);
 
   const commitConfig = (next: Config) => {
     setConfig(next);
