@@ -26,9 +26,18 @@ def acquire() -> bool:
     if not _IS_WINDOWS:
         return True
     import ctypes
+    from ctypes import wintypes
 
-    kernel32 = ctypes.windll.kernel32
+    # use_last_error captures the Win32 last-error at the moment of the call;
+    # reading it via a separate kernel32.GetLastError() ctypes call is
+    # unreliable (the call machinery clobbers the thread's last-error first),
+    # which let a second instance slip past the guard.
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.restype = wintypes.HANDLE
+    kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
+
     _handle = kernel32.CreateMutexW(None, False, _MUTEX_NAME)
+    err = ctypes.get_last_error()
     if not _handle:
         return True  # couldn't create the mutex; don't block startup
-    return kernel32.GetLastError() != _ERROR_ALREADY_EXISTS
+    return err != _ERROR_ALREADY_EXISTS

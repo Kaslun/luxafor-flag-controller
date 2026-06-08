@@ -311,13 +311,14 @@ class BeaconEngine:
                 )
             )
             if changed or heartbeat_due:
-                # Leaving a built-in pattern? A static write alone won't stop
-                # it (the firmware resumes the animation), so send an explicit
-                # pattern-off first. ``_last_report is None`` covers startup,
-                # where the device may still be mid-pattern from a prior run.
-                target_is_pattern = effects.report_is_pattern(report)
-                was_pattern = effects.report_is_pattern(self._last_report)
-                if not target_is_pattern and (was_pattern or self._last_report is None):
+                # Leaving a firmware animation (strobe/wave/pattern)? A static
+                # write alone won't stop it — the firmware keeps animating — so
+                # send an explicit animation reset (pattern-off) first, then the
+                # new report. This covers anim->solid and anim->anim switches.
+                # ``_last_report is None`` covers startup, where the device may
+                # still be mid-animation from a prior run.
+                was_anim = effects.report_is_animation(self._last_report)
+                if was_anim or self._last_report is None:
                     self.device.write(effects.PATTERN_OFF_REPORT)
                     time.sleep(0.06)  # let the firmware settle before the color
                 self.device.write(report)

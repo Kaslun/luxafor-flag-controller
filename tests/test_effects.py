@@ -86,3 +86,14 @@ def test_report_is_pattern():
     assert not report_is_pattern(build_report((1, 2, 3), {"type": "strobe"}))
     assert not report_is_pattern(PATTERN_OFF_REPORT)  # id 0 = off, not running
     assert not report_is_pattern(None)
+
+
+def test_report_is_animation():
+    from engine.effects import PATTERN_OFF_REPORT, report_is_animation
+
+    assert report_is_animation(build_report((1, 2, 3), {"type": "strobe"}))
+    assert report_is_animation(build_report((1, 2, 3), {"type": "wave", "wave_type": 2}))
+    assert report_is_animation(build_report((0, 0, 0), {"type": "pattern", "pattern_id": 5}))
+    assert not report_is_animation(build_report((1, 2, 3), None))  # solid
+    assert not report_is_animation(PATTERN_OFF_REPORT)
+    assert not report_is_animation(None)

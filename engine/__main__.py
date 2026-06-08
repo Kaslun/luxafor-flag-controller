@@ -116,7 +116,9 @@ def main() -> None:
         log.info("another instance is running (port=%s); opening it", existing)
         if existing is not None:
             try:
-                webbrowser.open(f"http://{HOST}:{existing}/")
+                # new=0 asks the browser to reuse an existing window/tab where
+                # it can rather than always spawning a new one
+                webbrowser.open(f"http://{HOST}:{existing}/", new=0)
             except Exception:
                 pass
         return
@@ -135,10 +137,12 @@ def main() -> None:
 
     app = create_app(engine)
     start_tray(engine)
-    # Open the dashboard on a manual launch (or --show / first run); a
-    # sign-in autostart launch stays quietly in the tray.
-    if force_show or first_run or not autostart_launch:
-        _open_browser_soon(url)
+    # Open the dashboard on startup — every launch, including a sign-in
+    # autostart launch (a second launch reuses this instance, above, rather
+    # than starting another). force_show/first_run/autostart_launch are kept
+    # for logging only.
+    _ = (force_show, first_run, autostart_launch)
+    _open_browser_soon(url)
 
     log.info("serving on %s (first_run=%s show=%s)", url, first_run, force_show)
     try:

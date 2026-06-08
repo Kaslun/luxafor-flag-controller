@@ -184,8 +184,20 @@ class TrayController:
 
     def _quit(self, icon, item):
         self._running = False
-        self.engine.stop()
-        icon.stop()
+        # turn the flag off and release the device/history handles
+        try:
+            self.engine.shutdown()
+        except Exception:
+            pass
+        try:
+            icon.stop()
+        except Exception:
+            pass
+        # uvicorn runs (and blocks) on the main thread; stopping the engine
+        # and tray does not end it, so the process would linger in Task
+        # Manager. Force the whole process — onefile child AND the PyInstaller
+        # bootloader parent — to terminate now.
+        os._exit(0)
 
     # -------------------------------------------------- lifecycle
 

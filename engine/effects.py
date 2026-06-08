@@ -102,16 +102,30 @@ def is_solid(effect: dict | None) -> bool:
     return effect is None or effect.get("type", "solid") == "solid"
 
 
-# A running built-in pattern (command 0x06) is NOT stopped by a static-color
-# write — it flashes the color then the firmware resumes the animation.
-# Sending the pattern command with id 0 stops it (verified on the device).
+# A running firmware animation (built-in pattern 0x06, strobe 0x03, wave
+# 0x04) is NOT reliably stopped by a static-color write — the firmware keeps
+# animating. Sending the pattern command with id 0 resets the animation
+# engine (verified on the device for patterns; applied to strobe/wave too).
 PATTERN_CMD = 0x06
+STROBE_CMD = 0x03
+WAVE_CMD = 0x04
 PATTERN_OFF_REPORT = [0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
 def report_is_pattern(report: list[int] | None) -> bool:
     """True if a built-in pattern animation is running for this report."""
     return bool(report) and len(report) > 2 and report[1] == PATTERN_CMD and report[2] != 0
+
+
+def report_is_animation(report: list[int] | None) -> bool:
+    """True if this report drives any firmware animation (strobe/wave/pattern)
+    that must be explicitly stopped before a clean static write."""
+    if not report or len(report) < 2:
+        return False
+    cmd = report[1]
+    if cmd == PATTERN_CMD:
+        return len(report) > 2 and report[2] != 0
+    return cmd in (STROBE_CMD, WAVE_CMD)
 
 
 def ignores_color(effect: dict | None) -> bool:
