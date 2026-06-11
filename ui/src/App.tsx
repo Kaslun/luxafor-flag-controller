@@ -26,6 +26,7 @@ import {
   SettingsModal,
   ConflictSheet,
   UpdateBanner,
+  UpdateSheet,
 } from "./components/modals";
 
 interface PickerState {
@@ -67,6 +68,7 @@ export default function App() {
   const [rechecking, setRechecking] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [showUpdate, setShowUpdate] = useState(false);
   const [applying, setApplying] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [, setTick] = useState(0);
@@ -74,6 +76,7 @@ export default function App() {
   const putTimer = useRef<number | null>(null);
   const prevConflict = useRef(false);
   const prevFocusSeq = useRef<number | null>(null);
+  const promptedUpdateFor = useRef<string | null>(null);
 
   useEffect(() => {
     api.getConfig().then(setConfig).catch((e) => setErr(String(e)));
@@ -112,6 +115,21 @@ export default function App() {
     }
     prevFocusSeq.current = seq;
   }, [state?.focus_seq]);
+
+  // proactively prompt when an update is newly detected (once per version) —
+  // so the user doesn't have to dig into Settings to notice it
+  useEffect(() => {
+    const uv = state?.update_available?.version ?? null;
+    if (!uv) {
+      promptedUpdateFor.current = null;
+      return;
+    }
+    if (promptedUpdateFor.current !== uv) {
+      promptedUpdateFor.current = uv;
+      setUpdateDismissed(false);
+      setShowUpdate(true);
+    }
+  }, [state?.update_available]);
 
   const commitConfig = (next: Config) => {
     setConfig(next);
@@ -414,6 +432,18 @@ export default function App() {
           rechecking={rechecking}
           onRecheck={recheck}
           onDismiss={() => setShowConflict(false)}
+        />
+      )}
+      {showUpdate && state.update_available && (
+        <UpdateSheet
+          version={state.version}
+          update={state.update_available}
+          installing={applying}
+          onInstall={() => {
+            setShowUpdate(false);
+            installUpdate();
+          }}
+          onLater={() => setShowUpdate(false)}
         />
       )}
       {picker && (

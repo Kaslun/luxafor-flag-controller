@@ -594,6 +594,62 @@ export function ConflictSheet({
   );
 }
 
+export function UpdateSheet({
+  version,
+  update,
+  installing,
+  onInstall,
+  onLater,
+}: {
+  version: string;
+  update: UpdateAvailable;
+  installing: boolean;
+  onInstall: () => void;
+  onLater: () => void;
+}) {
+  return (
+    <Scrim onClose={onLater} z={75}>
+      <div className="sheet" style={{ width: 480 }}>
+        <div className="sheet-head" style={{ ["--live" as string]: "var(--accent)" }}>
+          <div
+            className="emblem"
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 14,
+              display: "grid",
+              placeItems: "center",
+              background: "color-mix(in srgb, var(--accent) 16%, var(--bg-card))",
+              color: "var(--accent)",
+            }}
+          >
+            <Icon name="download" size={24} />
+          </div>
+          <div>
+            <div className="eye">— update available</div>
+            <h2>Beacon v{update.version} is ready</h2>
+            <p>
+              A new version is available with the latest fixes and improvements.
+              Installing takes a few seconds — Beacon closes and reopens on its own.
+            </p>
+          </div>
+        </div>
+        <div className="sheet-foot">
+          <span className="fnote">You're on v{version}.</span>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn" onClick={onLater}>
+              Later
+            </button>
+            <button className="btn primary" onClick={onInstall} disabled={installing}>
+              <Icon name="download" size={15} /> {installing ? "Installing…" : "Install now"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Scrim>
+  );
+}
+
 export function UpdateBanner({
   update,
   onInstall,
