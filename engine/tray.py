@@ -24,7 +24,7 @@ from PIL import Image, ImageDraw
 from pystray import Menu, MenuItem
 
 from engine.logging_setup import get_logger
-from engine.palette import SELECTABLE, name_of, rgb_of
+from engine.palette import hex_to_rgb, is_hex
 from engine.paths import log_path
 
 log = get_logger()
@@ -33,11 +33,30 @@ _DEFAULT_OVERRIDE_MINUTES = 30
 ISSUES_URL = "https://github.com/Kaslun/luxafor-flag-controller/issues"
 
 
+def _palette_rgb(palette, color: str) -> tuple[int, int, int]:
+    """Resolve a colour value to RGB against the live, user-editable palette."""
+    if is_hex(color):
+        return hex_to_rgb(color)
+    for p in palette:
+        if p.slot == color:
+            return (0, 0, 0) if p.off else hex_to_rgb(p.led or p.hex)
+    return (0, 0, 0)
+
+
+def _palette_name(palette, color: str) -> str:
+    if is_hex(color):
+        return "Custom"
+    for p in palette:
+        if p.slot == color:
+            return p.name
+    return color
+
+
 def _rounded(draw: ImageDraw.ImageDraw, box, radius, fill):
     draw.rounded_rectangle(box, radius=radius, fill=fill)
 
 
-def render_icon(state_snapshot: dict, size: int = 64) -> Image.Image:
+def render_icon(state_snapshot: dict, palette, size: int = 64) -> Image.Image:
     """Compose the tray icon for the current state."""
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -57,7 +76,7 @@ def render_icon(state_snapshot: dict, size: int = 64) -> Image.Image:
     elif disconnected:
         fill = (90, 90, 100, 255)
     else:
-        r, g, b = rgb_of(slot)
+        r, g, b = _palette_rgb(palette, slot)
         fill = (r, g, b, 255)
     _rounded(d, base_box, radius=int(8 * s), fill=fill)
 
@@ -117,7 +136,7 @@ class TrayController:
             return "Paused"
         if not snap["device_connected"]:
             return "Disconnected"
-        return name_of(snap["color"])
+        return _palette_name(self.engine.config.palette, snap["color"])
 
     def _is_paused(self) -> bool:
         return self.engine.state.snapshot()["paused"]
@@ -130,9 +149,14 @@ class TrayController:
         return ov["color"] if ov else None
 
     def _override_items(self):
+        # built from the palette at tray-start; labels resolve live. A palette
+        # edited after launch is picked up on next start.
+        palette = self.engine.config.palette
+        slots = [p.slot for p in palette if not p.off]
+
         def make(slot):
             return MenuItem(
-                name_of(slot),
+                _palette_name(self.engine.config.palette, slot),
                 lambda icon, item: self.engine.set_override(
                     slot, _DEFAULT_OVERRIDE_MINUTES
                 ),
@@ -140,7 +164,7 @@ class TrayController:
                 radio=True,
             )
 
-        return [make(s) for s in SELECTABLE]
+        return [make(s) for s in slots]
 
     def _build_menu(self) -> Menu:
         return Menu(
@@ -209,7 +233,7 @@ class TrayController:
         while self._running:
             try:
                 snap = self.engine.state.snapshot()
-                self.icon.icon = render_icon(snap)
+                self.icon.icon = render_icon(snap, self.engine.config.palette)
                 self.icon.title = f"Beacon — {self._status_text()}"
             except Exception as e:  # pragma: no cover - defensive
                 log.debug("tray refresh failed: %s", e)
@@ -218,7 +242,7 @@ class TrayController:
     def run(self):
         """Blocking — call on a dedicated thread."""
         self._running = True
-        self.icon.icon = render_icon(self.engine.state.snapshot())
+        self.icon.icon = render_icon(self.engine.state.snapshot(), self.engine.config.palette)
         self._updater = threading.Thread(target=self._refresh_loop, daemon=True)
         self._updater.start()
         self.icon.run()

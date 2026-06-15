@@ -1,6 +1,6 @@
 // Modals + banners — ported from the design (modals.jsx), wired to real data.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons";
 import { Flag } from "./Flag";
 import { Switch } from "./controls";
@@ -85,6 +85,19 @@ export function Scrim({
   z?: number;
   children: React.ReactNode;
 }) {
+  // close on Escape (a11y); the topmost scrim wins because keydown fires on
+  // the focused document and each mounted Scrim listens while open
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <div className="scrim" style={{ zIndex: z }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}>{children}</div>
@@ -150,6 +163,10 @@ function ColorFields({
             </div>
           </div>
         </div>
+        <p className="hint" style={{ marginTop: 8 }}>
+          The flag shows colours more vividly than the screen, so a custom pick
+          may look brighter on the device than in this preview.
+        </p>
       </div>
 
       {allowEffects && (
@@ -291,16 +308,18 @@ export function PaletteEditor({
   palette,
   onChange,
   onRecolor,
+  onDelete,
   onClose,
 }: {
   palette: PaletteColor[];
   onChange: (p: PaletteColor[]) => void;
   onRecolor: (index: number) => void;
+  onDelete: (index: number) => void;
   onClose: () => void;
 }) {
   const setSlot = (i: number, patch: Partial<PaletteColor>) =>
     onChange(palette.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
-  const del = (i: number) => onChange(palette.filter((_, idx) => idx !== i));
+  const del = (i: number) => onDelete(i);
   const add = () => {
     const slot = "c" + Date.now();
     const last = palette.length - 1; // off is kept last
@@ -523,11 +542,13 @@ export function ConflictSheet({
   rechecking,
   onRecheck,
   onDismiss,
+  connected = true,
 }: {
   conflict: ConflictDetected;
   rechecking: boolean;
   onRecheck: () => void;
   onDismiss: () => void;
+  connected?: boolean;
 }) {
   const allClear = !conflict.luxafor_v2_running && !conflict.luxafor_v2_startup;
   return (
@@ -548,13 +569,11 @@ export function ConflictSheet({
           </div>
         </div>
         <div className="sheet-body">
-          <div className="step done">
-            <div className="num">
-              <Icon name="check" size={15} />
-            </div>
+          <div className={"step" + (connected ? " done" : "")}>
+            <div className="num">{connected ? <Icon name="check" size={15} /> : "•"}</div>
             <div className="stx">
-              <h4>Beacon found your flag</h4>
-              <p>Connected over USB.</p>
+              <h4>{connected ? "Beacon found your flag" : "Plug in your flag"}</h4>
+              <p>{connected ? "Connected over USB." : "No Luxafor detected on USB yet."}</p>
             </div>
           </div>
           <div className={"step" + (!conflict.luxafor_v2_running ? " done" : "")}>

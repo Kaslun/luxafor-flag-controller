@@ -15,7 +15,7 @@ def test_swap_script_contains_paths_and_relaunch():
     )
     assert r"C:\new\beacon-new.exe" in s
     assert r"C:\app\beacon.exe" in s
-    assert "--show" in s               # relaunch opens the dashboard
+    assert 'start "" "%DST%"' in s     # relaunches the new exe
     assert "move /Y" in s              # swaps the file
     assert "ping" in s                 # console-less delay (not `timeout`)
     assert 'del "%~f0"' in s           # script removes itself

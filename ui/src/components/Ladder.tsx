@@ -5,24 +5,27 @@ import { Fragment } from "react";
 import { Icon } from "../icons";
 import type { Kind } from "../types";
 
-export function Ladder({ activeKind }: { activeKind: Kind }) {
+export function Ladder({ activeKind, dimmed = false }: { activeKind: Kind; dimmed?: boolean }) {
   const rungs = [
     { kind: "trigger", lab: "Triggers" },
     { kind: "override", lab: "Override" },
     { kind: "routine", lab: "Routines" },
     { kind: "rest", lab: "Resting" },
   ];
-  const liveKind =
-    activeKind === "trigger"
-      ? "trigger"
-      : activeKind === "override"
-      ? "override"
-      : activeKind === "routine"
-      ? "routine"
-      : "rest";
+  // when paused/disconnected the engine isn't controlling the flag, so nothing
+  // is "live" — grey the ladder rather than implying a resting status.
+  const liveKind = dimmed
+    ? null
+    : activeKind === "trigger"
+    ? "trigger"
+    : activeKind === "override"
+    ? "override"
+    : activeKind === "routine"
+    ? "routine"
+    : "rest";
 
   return (
-    <div className="ladder">
+    <div className="ladder" style={dimmed ? { opacity: 0.5 } : undefined}>
       {rungs.map((r, i) => {
         const on = r.kind === liveKind;
         return (

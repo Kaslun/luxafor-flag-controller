@@ -125,6 +125,38 @@ def test_no_active_triggers_falls_through():
     assert r.kind == "off"
 
 
+# ----------------------------------------------------------- tier bands
+
+def test_normal_trigger_beats_routine():
+    # Normal (40) is above routines but below a manual override
+    s = FakeState(active_triggers=[trig(color="busy", priority=40)])
+    r = resolve(WED_10, s, cfg(routines=[routine(color="lunch")]))
+    assert r.kind == "trigger" and r.color == "busy"
+
+
+def test_normal_trigger_yields_to_override():
+    s = FakeState(
+        active_triggers=[trig(color="busy", priority=40)],
+        manual_override={"color": "focus", "expiry": None},
+    )
+    r = resolve(WED_10, s, cfg(routines=[routine(color="lunch")]))
+    assert r.kind == "override" and r.color == "focus"
+
+
+def test_low_trigger_yields_to_routine():
+    # Low (20) ranks below routines
+    s = FakeState(active_triggers=[trig(color="busy", priority=20)])
+    r = resolve(WED_10, s, cfg(routines=[routine(color="lunch")]))
+    assert r.kind == "routine" and r.color == "lunch"
+
+
+def test_low_trigger_beats_floor():
+    # ...but still shows when nothing else is active
+    s = FakeState(active_triggers=[trig(color="busy", priority=20)])
+    r = resolve(WED_10, s, cfg(off_behavior="off"))
+    assert r.kind == "trigger" and r.color == "busy"
+
+
 def test_override_beats_routine():
     s = FakeState(manual_override={"color": "focus", "expiry": None})
     r = resolve(WED_10, s, cfg(routines=[routine(color="lunch")]))

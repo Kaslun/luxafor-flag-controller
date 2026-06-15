@@ -36,6 +36,11 @@ jobs:
         # than one Python; a mismatch ships an exe that can't load its DLL)
         run: python -m pip install -e ".[dev]"
 
+      - name: Run tests
+        # a tagged release must not skip the suite (ci.yml only runs on
+        # branch/PR pushes, never on tags)
+        run: python -m pytest -q
+
       - name: Build UI
         working-directory: ui
         run: |

@@ -41,10 +41,16 @@ class ConfigError(ValueError):
 # call_detection / lock_detection settings.
 TRIGGER_TYPES = ("mic", "mic_app", "webcam", "lock", "hotkey")
 
-# Manual override resolves at this priority. A trigger wins over a manual
-# override only if its priority is strictly greater (see engine.resolver).
+# Triggers resolve in importance bands relative to the manual override and to
+# routines (see engine.resolver). A trigger with priority strictly above
+# OVERRIDE_PRIORITY beats a manual override; one above ROUTINE_PRIORITY (but
+# not the override) beats routines; below that it only shows when nothing else
+# is active. The four UI tiers map onto these bands:
+#   Low=20 (below routines) · Normal=40 (above routines, below override)
+#   High=70 / Critical=90 (above override). 50 == the override itself.
 PRIORITY_MIN, PRIORITY_MAX = 0, 100
 OVERRIDE_PRIORITY = 50
+ROUTINE_PRIORITY = 30
 
 
 def triggers_meta() -> dict:

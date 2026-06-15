@@ -40,6 +40,8 @@ if _IS_WINDOWS:
 
     WM_HOTKEY = 0x0312
     WM_APP_RELOAD = 0x8001  # WM_APP + 1
+    WM_APP_SUSPEND = 0x8002  # unregister all (while the UI captures a combo)
+    WM_APP_RESUME = 0x8003  # re-register after capture
 
     _user32.RegisterHotKey.restype = wintypes.BOOL
     _user32.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
@@ -95,6 +97,20 @@ class HotkeyManager:
             return
         _user32.PostThreadMessageW(self._tid, 0x0012, None, None)  # WM_QUIT
 
+    def _post(self, msg: int) -> bool:
+        if not _IS_WINDOWS or not self._ready.is_set() or self._tid is None:
+            return False
+        _user32.PostThreadMessageW(self._tid, msg, None, None)
+        return True
+
+    def suspend(self) -> None:
+        """Temporarily release all combos so the UI can capture one of them."""
+        self._post(WM_APP_SUSPEND)
+
+    def resume(self) -> None:
+        """Re-register combos after a capture."""
+        self._post(WM_APP_RESUME)
+
     # ------------------------------------------------------------ internals
 
     def _specs(self) -> list[tuple[str, int, int]]:
@@ -115,14 +131,24 @@ class HotkeyManager:
 
     def _register_all(self, idmap: dict[int, str]) -> None:
         idmap.clear()
+        failed: list[str] = []
         for i, (tid, mods, vk) in enumerate(self._specs(), start=1):
             try:
                 if _user32.RegisterHotKey(None, i, mods, vk):
                     idmap[i] = tid
                 else:
+                    failed.append(tid)
                     log.warning("hotkey %s: combo unavailable (already in use?)", tid)
             except Exception as e:  # pragma: no cover - defensive
+                failed.append(tid)
                 log.debug("hotkey %s register error: %s", tid, e)
+        self._report_errors(failed)
+
+    def _report_errors(self, failed: list[str]) -> None:
+        try:
+            self.engine.set_hotkey_errors(failed)
+        except Exception:
+            pass
 
     def _unregister_all(self, idmap: dict[int, str]) -> None:
         for i in list(idmap):
@@ -139,6 +165,7 @@ class HotkeyManager:
         # so PostThreadMessage from other threads isn't dropped
         _user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0)
         idmap: dict[int, str] = {}
+        suspended = False
         self._register_all(idmap)
         self._ready.set()
         log.info("hotkey listener started (%d registered)", len(idmap))
@@ -155,6 +182,14 @@ class HotkeyManager:
                         except Exception:
                             log.exception("toggle_hotkey failed")
                 elif msg.message == WM_APP_RELOAD:
+                    if not suspended:
+                        self._unregister_all(idmap)
+                        self._register_all(idmap)
+                elif msg.message == WM_APP_SUSPEND:
+                    suspended = True
+                    self._unregister_all(idmap)
+                elif msg.message == WM_APP_RESUME:
+                    suspended = False
                     self._unregister_all(idmap)
                     self._register_all(idmap)
         finally:

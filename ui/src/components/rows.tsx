@@ -38,33 +38,59 @@ function HotkeyCapture({
   onChange: (p: Trigger["params"]) => void;
 }) {
   const [listening, setListening] = useState(false);
+  const [needMod, setNeedMod] = useState(false);
+
+  // while listening, release the registered global hotkeys so the OS doesn't
+  // swallow the very combo (or a colliding one) the user is trying to capture
   useEffect(() => {
     if (!listening) return;
+    api.suspendHotkeys().catch(() => {});
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      const combo = captureHotkey(e);
-      if (combo) {
-        onChange(combo);
-        setListening(false);
+      if (e.key === "Escape") {
+        setListening(false); // cancel, keep the existing combo
+        return;
       }
+      const combo = captureHotkey(e);
+      if (!combo) return; // unsupported key — keep listening
+      if (!(combo.ctrl || combo.alt || combo.shift || combo.win)) {
+        setNeedMod(true); // a bare key isn't allowed
+        return;
+      }
+      setNeedMod(false);
+      onChange(combo);
+      setListening(false);
     };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      api.resumeHotkeys().catch(() => {});
+    };
   }, [listening, onChange]);
 
   return (
-    <button
-      type="button"
-      className={"colorbtn" + (listening ? " listening" : "")}
-      onClick={() => setListening((l) => !l)}
-    >
-      <Icon name="keyboard" size={16} />
-      {listening ? "Press a key combo…" : hotkeyLabel(value)}
-      <span className="muted ar" style={{ fontSize: 12 }}>
-        {listening ? "listening" : "change"}
-      </span>
-    </button>
+    <>
+      <button
+        type="button"
+        className={"colorbtn" + (listening ? " listening" : "")}
+        onClick={() => {
+          setNeedMod(false);
+          setListening((l) => !l);
+        }}
+      >
+        <Icon name="keyboard" size={16} />
+        {listening ? "Press a key combo… (Esc to cancel)" : hotkeyLabel(value)}
+        <span className="muted ar" style={{ fontSize: 12 }}>
+          {listening ? "listening" : "change"}
+        </span>
+      </button>
+      {needMod && (
+        <p className="hint" style={{ color: "var(--error)" }}>
+          Add a modifier — Ctrl, Alt, Shift, or Win — plus a key.
+        </p>
+      )}
+    </>
   );
 }
 
@@ -73,6 +99,7 @@ export function TriggerRow({
   palette,
   triggerMeta,
   active,
+  regError = false,
   open,
   onOpen,
   onChange,
@@ -83,6 +110,7 @@ export function TriggerRow({
   palette: PaletteColor[];
   triggerMeta: TriggerMeta;
   active: boolean;
+  regError?: boolean;
   open: boolean;
   onOpen: () => void;
   onChange: (t: Trigger) => void;
@@ -125,6 +153,12 @@ export function TriggerRow({
           <div className="r-meta">
             <Icon name={triggerIcon(t.type)} size={13} />
             <span>{needsHotkey ? hotkeyLabel(t.params) : typeMeta?.name}</span>
+            {needsHotkey && regError && (
+              <>
+                <span className="sep">·</span>
+                <span style={{ color: "var(--error)" }}>combo unavailable</span>
+              </>
+            )}
             {active && (
               <>
                 <span className="sep">·</span>
@@ -190,10 +224,17 @@ export function TriggerRow({
             <div className="field">
               <label>— shortcut</label>
               <HotkeyCapture value={t.params} onChange={(p) => set({ params: p })} />
-              <p className="hint">
-                Press it anywhere to toggle this status on and off. Needs a
-                modifier (Ctrl / Alt / Shift / Win) plus a key.
-              </p>
+              {regError ? (
+                <p className="hint" style={{ color: "var(--error)" }}>
+                  Windows wouldn't register this combo (another app may own it, or
+                  it's reserved). Pick a different one.
+                </p>
+              ) : (
+                <p className="hint">
+                  Press it anywhere to toggle this status on and off. Needs a
+                  modifier (Ctrl / Alt / Shift / Win) plus a key.
+                </p>
+              )}
             </div>
           )}
 
@@ -215,19 +256,21 @@ export function TriggerRow({
             <p className="hint">
               {tier === "critical" ? (
                 <>
-                  <b>Critical</b> outranks everything, including other High triggers.
+                  <b>Critical</b> outranks everything — a manual override, routines,
+                  and other triggers.
                 </>
               ) : tier === "high" ? (
                 <>
-                  <b>High</b> beats a manual override and every routine.
+                  <b>High</b> beats a manual override and routines.
                 </>
               ) : tier === "normal" ? (
                 <>
-                  <b>Normal</b> yields to a manual override.
+                  <b>Normal</b> beats routines, but yields to a manual override.
                 </>
               ) : (
                 <>
-                  <b>Low</b> only shows when nothing else is active.
+                  <b>Low</b> only shows when nothing else is active — routines
+                  outrank it.
                 </>
               )}
             </p>
@@ -343,6 +386,12 @@ export function RoutineRow({
                   onChange={(e) => set({ end: e.target.value })}
                 />
               </div>
+              {r.end <= r.start && (
+                <p className="hint" style={{ color: "var(--error)" }}>
+                  End time must be after start (overnight windows aren't
+                  supported yet).
+                </p>
+              )}
             </div>
           </div>
           <div className="field">

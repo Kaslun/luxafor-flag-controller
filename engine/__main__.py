@@ -5,11 +5,12 @@ its event loop) on the main thread, the pystray icon on a daemon thread.
 
 Behavior on launch:
   - Single instance: a named mutex makes the guard atomic. If Beacon is
-    already running, we just open its dashboard and exit — double-clicking
-    the exe (or shortcut) never spawns a second tray icon on another port.
-  - Browser: open the dashboard automatically on a normal manual launch,
-    on first-ever run, or with ``--show`` (post-update relaunch). Only a
-    sign-in autostart launch (``--autostart``) stays quietly in the tray.
+    already running, hand off to it — focus the open tab if one is connected,
+    else open one — and exit. Double-clicking the exe never spawns a second
+    tray icon on another port.
+  - Browser: open the dashboard on startup, but skip it (and instead nudge
+    the existing tab forward) if a UI tab is already connected — so a
+    reconnecting tab after a port rebind doesn't leave a duplicate.
 
 The server binds loopback on a default port, falling back to the next few
 ports if taken; the chosen port is recorded in an instance lock file so the
@@ -20,7 +21,6 @@ from __future__ import annotations
 
 import json
 import socket
-import sys
 import threading
 import webbrowser
 from urllib.request import Request, urlopen
@@ -31,7 +31,7 @@ from engine import singleinstance
 from engine.app import create_app
 from engine.logging_setup import setup_logging
 from engine.loop import BeaconEngine
-from engine.paths import app_dir, config_path
+from engine.paths import app_dir
 from engine.tray import start_tray
 
 DEFAULT_PORT = 54741
@@ -95,16 +95,6 @@ def _pick_port() -> int:
     )
 
 
-def _open_browser_soon(url: str, delay: float = 1.5) -> None:
-    def _go():
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
-
-    threading.Timer(delay, _go).start()
-
-
 def _client_alive(port: int) -> bool:
     try:
         with urlopen(f"http://{HOST}:{port}/api/clients", timeout=0.75) as r:
@@ -160,12 +150,6 @@ def main() -> None:
             _handoff_to_existing(existing)
         return
 
-    args = sys.argv[1:]
-    autostart_launch = "--autostart" in args
-    force_show = "--show" in args
-    # First-ever run? (decide before the engine creates the config file)
-    first_run = not config_path().exists()
-
     engine = BeaconEngine()
     port = _pick_port()
     engine.state.port = port
@@ -177,10 +161,9 @@ def main() -> None:
     # Open the dashboard on startup — but skip it if a UI tab is already open
     # (e.g. a previous tab that reconnects when we rebind the same port), so we
     # don't drop a duplicate tab into the user's focused window.
-    _ = (force_show, first_run, autostart_launch)  # kept for logging only
     _open_dashboard_when_idle(engine, url)
 
-    log.info("serving on %s (first_run=%s show=%s)", url, first_run, force_show)
+    log.info("serving on %s", url)
     try:
         uvicorn.run(app, host=HOST, port=port, log_level="warning", log_config=None)
     except KeyboardInterrupt:

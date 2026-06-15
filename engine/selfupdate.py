@@ -91,7 +91,7 @@ set "_MEIPASS2="
 set "_PYI_ARCHIVE_FILE="
 set "_PYI_APPLICATION_HOME_DIR="
 set "_PYI_PARENT_PROCESS_LEVEL="
-start "" "%DST%" --show
+start "" "%DST%"
 del "%SRC%" >NUL 2>NUL
 del "%~f0" >NUL 2>NUL
 """

@@ -11,17 +11,21 @@ Priority ladder (highest first), matching the Beacon design's
   1. paused        — engine writes nothing
   2. disconnected  — no working HID handle
   3. preview       — live color preview while the user is picking
-  4. triggers + override — the unified event band (see below)
-  5. routine       — a matching enabled scheduled block (later start wins)
-  6. floor          — off / dim / available, per settings.off_behavior
+  4. urgent triggers — active triggers with priority > OVERRIDE_PRIORITY
+  5. override      — manual override
+  6. normal triggers — active triggers with priority > ROUTINE_PRIORITY
+  7. routine       — a matching enabled scheduled block (later start wins)
+  8. low triggers  — any remaining active trigger
+  9. floor          — off / dim / available, per settings.off_behavior
 
-The trigger band: the loop evaluates each enabled trigger's condition and
-hands the resolver the list of *active* triggers (as plain dicts) on
-``state.active_triggers``. The highest-``priority`` active trigger wins; on
-a tie the earlier one (config order) wins. A manual override resolves at a
-fixed ``OVERRIDE_PRIORITY`` (50): an active trigger beats the override only
-if its priority is strictly greater. This keeps the resolver pure — all
-I/O (mic/lock/webcam sampling) happens in the loop.
+Triggers resolve in *importance bands* (the four UI tiers), not one block:
+High/Critical (priority > OVERRIDE_PRIORITY) outrank a manual override;
+Normal (> ROUTINE_PRIORITY) beats routines but yields to an override; Low
+only wins when nothing else is active. Within a band the highest priority
+wins (ties → config order). The loop evaluates each enabled trigger's
+condition and hands the resolver the list of *active* triggers as plain
+dicts on ``state.active_triggers``; this keeps the resolver pure — all I/O
+(mic/lock/webcam sampling) happens in the loop.
 
 The resolver emits both ``routine`` (the winning source id) and ``kind``
 (the rendering bucket the UI switches on): one of
@@ -33,7 +37,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
-from engine.config import OVERRIDE_PRIORITY, Config, Routine
+from engine.config import OVERRIDE_PRIORITY, ROUTINE_PRIORITY, Config, Routine
 
 
 @dataclass
@@ -113,35 +117,54 @@ def resolve(now: dt.datetime, state, config: Config) -> ResolvedStatus:
             kind="preview", effect=pv.get("effect"),
         )
 
-    # 4. trigger + override band
-    active = list(getattr(state, "active_triggers", None) or [])
-    best = max(active, key=lambda t: t.get("priority", OVERRIDE_PRIORITY)) if active else None
-    ov = state.manual_override
+    # 4–8. trigger importance bands interleaved with override and routines.
+    # active_triggers is sorted highest-priority-first so the first match in
+    # each band is the band winner.
+    active = sorted(
+        getattr(state, "active_triggers", None) or [],
+        key=lambda t: t.get("priority", OVERRIDE_PRIORITY),
+        reverse=True,
+    )
 
-    # a trigger wins when there is no override, or its priority strictly
-    # exceeds the override's fixed priority
-    if best is not None and (
-        not ov or best.get("priority", OVERRIDE_PRIORITY) > OVERRIDE_PRIORITY
-    ):
+    def _trigger(t) -> ResolvedStatus:
         return ResolvedStatus(
-            best.get("id", "trigger"), best["color"],
-            best.get("name") or "Trigger",
-            kind="trigger", effect=best.get("effect"),
+            t.get("id", "trigger"), t["color"], t.get("name") or "Trigger",
+            kind="trigger", effect=t.get("effect"),
         )
 
+    def _first(pred):
+        return next((t for t in active if pred(t.get("priority", OVERRIDE_PRIORITY))), None)
+
+    ov = state.manual_override
+
+    # band: urgent triggers (above the override)
+    urgent = _first(lambda p: p > OVERRIDE_PRIORITY)
+    if urgent is not None:
+        return _trigger(urgent)
+
+    # band: manual override
     if ov:
         return ResolvedStatus(
             "override", ov.get("color"), "Manual",
             kind="override", effect=ov.get("effect"),
         )
 
-    # 7. active scheduled routine
+    # band: normal triggers (above routines, below the override)
+    normal = _first(lambda p: p > ROUTINE_PRIORITY)
+    if normal is not None:
+        return _trigger(normal)
+
+    # band: active scheduled routine
     r = active_routine(config.routines, now)
     if r:
         return ResolvedStatus(
             "routine", r.color, r.name or "Routine",
             kind="routine", effect=getattr(r, "effect", None),
         )
+
+    # band: low triggers (only when nothing above is active)
+    if active:
+        return _trigger(active[0])
 
     # 8. floor — depends on off_behavior
     ob = s.off_behavior

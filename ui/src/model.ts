@@ -119,6 +119,21 @@ export function hexToHsl(hex: string): { h: number; s: number; l: number } {
   return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
 }
 
+/** Human label for a manual override's expiry (countdown chip in the hero). */
+export function overrideUntil(expiry: string | null): string {
+  if (!expiry) return "no time limit";
+  const end = new Date(expiry).getTime();
+  if (Number.isNaN(end)) return "";
+  const mins = Math.round((end - Date.now()) / 60000);
+  if (mins <= 0) return "expiring";
+  if (mins < 60) return `${mins}m left`;
+  const d = new Date(end);
+  let h = d.getHours();
+  const ap = h < 12 ? "am" : "pm";
+  h = ((h + 11) % 12) + 1;
+  return `until ${h}:${String(d.getMinutes()).padStart(2, "0")}${ap}`;
+}
+
 /** WCAG-ish ink colour for text/icons on a colour fill. */
 export function inkFor(hex: string): string {
   const c = hex.replace("#", "");

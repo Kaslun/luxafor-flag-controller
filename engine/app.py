@@ -132,6 +132,17 @@ def create_app(engine) -> FastAPI:
         # ask an already-open UI tab to bring itself forward
         return {"focus_seq": engine.request_focus()}
 
+    @app.post("/api/hotkeys/suspend")
+    def post_hotkeys_suspend():
+        # release registered combos so the UI can capture one of them
+        engine.hotkeys.suspend()
+        return {"suspended": True}
+
+    @app.post("/api/hotkeys/resume")
+    def post_hotkeys_resume():
+        engine.hotkeys.resume()
+        return {"suspended": False}
+
     @app.get("/api/config")
     def get_config():
         return engine.config.to_dict()

@@ -136,6 +136,7 @@ export interface State {
   locked: boolean;
   signals: Signals;
   active_triggers: ActiveTrigger[];
+  hotkey_errors: string[];
   device_connected: boolean;
   manual_override: ManualOverride | null;
   update_available: UpdateAvailable | null;

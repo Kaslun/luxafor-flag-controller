@@ -1,5 +1,5 @@
 import type { PaletteColor, State } from "../types";
-import { hexOf, nameOf, effectType } from "../model";
+import { hexOf, nameOf, effectType, overrideUntil } from "../model";
 import { Icon } from "../icons";
 import { Flag } from "./Flag";
 import { Brightness } from "./controls";
@@ -45,10 +45,12 @@ export function Hero({
     state.kind === "paused"
       ? "Paused"
       : state.kind === "disconnected"
-      ? "Off"
+      ? "No device"
       : state.kind === "off"
       ? "Off"
       : nameOf(palette, state.color);
+
+  const until = hasOverride ? overrideUntil(state.manual_override?.expiry ?? null) : "";
 
   return (
     <div className="hero">
@@ -63,7 +65,11 @@ export function Hero({
             blink={state.kind === "disconnected"}
           />
         </div>
-        <Brightness value={brightness} onChange={onBrightness} />
+        <Brightness
+          value={brightness}
+          onChange={onBrightness}
+          disabled={state.effect?.type === "pattern"}
+        />
       </div>
 
       <div className="hero-main">
@@ -107,7 +113,7 @@ export function Hero({
         <div className="hero-actions">
           {hasOverride ? (
             <button className="btn" onClick={onClearOverride}>
-              <Icon name="x" size={15} /> Clear
+              <Icon name="x" size={15} /> Clear{until ? ` · ${until}` : ""}
             </button>
           ) : (
             <button className="btn live" onClick={onOverride}>

@@ -40,6 +40,15 @@ interface PickerState {
   onApply: (color: string, effect: string) => void;
 }
 
+/** Turn an engine validation error into something a person can act on. */
+function humanizeSaveError(raw: string): string {
+  if (/start must be before end|midnight span/i.test(raw))
+    return "Couldn't save — a routine's end time must be after its start.";
+  if (/invalid .*hex|invalid color/i.test(raw))
+    return "Couldn't save — that colour isn't valid.";
+  return "Couldn't save your change. It's been reverted.";
+}
+
 function routineActiveNow(r: Routine, now: Date): boolean {
   if (!r.enabled) return false;
   const d = (now.getDay() + 6) % 7; // Mon=0
@@ -52,7 +61,11 @@ function routineActiveNow(r: Routine, now: Date): boolean {
 
 export default function App() {
   const [theme, toggleTheme] = useTheme();
-  const { data: state, refresh: refreshState } = usePolling<State>(api.getState, 3000);
+  const {
+    data: state,
+    failures,
+    refresh: refreshState,
+  } = usePolling<State>(api.getState, 3000);
 
   const [config, setConfig] = useState<Config | null>(null);
   const [effects, setEffects] = useState<EffectsMeta | null>(null);
@@ -71,12 +84,14 @@ export default function App() {
   const [showUpdate, setShowUpdate] = useState(false);
   const [applying, setApplying] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [undo, setUndo] = useState<{ label: string; config: Config } | null>(null);
   const [, setTick] = useState(0);
 
   const putTimer = useRef<number | null>(null);
   const prevConflict = useRef(false);
   const prevFocusSeq = useRef<number | null>(null);
-  const promptedUpdateFor = useRef<string | null>(null);
+  const seenVersion = useRef<string | null>(null);
+  const undoTimer = useRef<number | null>(null);
 
   useEffect(() => {
     api.getConfig().then(setConfig).catch((e) => setErr(String(e)));
@@ -116,28 +131,104 @@ export default function App() {
     prevFocusSeq.current = seq;
   }, [state?.focus_seq]);
 
-  // proactively prompt when an update is newly detected (once per version) —
-  // so the user doesn't have to dig into Settings to notice it
+  // proactively prompt when an update is newly detected — once per version,
+  // persisted so a page reload doesn't re-nag for the same version
   useEffect(() => {
     const uv = state?.update_available?.version ?? null;
-    if (!uv) {
-      promptedUpdateFor.current = null;
-      return;
-    }
-    if (promptedUpdateFor.current !== uv) {
-      promptedUpdateFor.current = uv;
+    if (!uv) return;
+    if (localStorage.getItem("beacon-update-prompted") !== uv) {
+      localStorage.setItem("beacon-update-prompted", uv);
       setUpdateDismissed(false);
       setShowUpdate(true);
     }
   }, [state?.update_available]);
 
+  // after an in-place update the engine relaunches and reuses this tab, but it
+  // would still be running the OLD bundle. If the engine version changes from
+  // what we first saw, reload to pick up the matching UI.
+  useEffect(() => {
+    const v = state?.version;
+    if (!v) return;
+    if (seenVersion.current == null) {
+      seenVersion.current = v;
+    } else if (seenVersion.current !== v) {
+      window.location.reload();
+    }
+  }, [state?.version]);
+
+  // make the tab itself a glance surface: title + favicon track live status
+  useEffect(() => {
+    if (!state || !config) return;
+    const off = ["off", "paused", "disconnected"].includes(state.kind);
+    const name =
+      state.kind === "paused"
+        ? "Paused"
+        : state.kind === "disconnected"
+        ? "No device"
+        : state.kind === "off"
+        ? "Off"
+        : config.palette.find((p) => p.slot === state.color)?.name ??
+          (state.color.startsWith("#") ? "Custom" : state.color);
+    document.title = `${off ? "○" : "●"} ${name} — Beacon`;
+    const hex = off
+      ? "#9aa0a6"
+      : config.palette.find((p) => p.slot === state.color)?.hex ??
+        (state.color.startsWith("#") ? state.color : "#9aa0a6");
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">` +
+      `<rect x="6" y="5" width="14" height="16" rx="4" fill="${hex}"/>` +
+      `<rect x="18" y="4" width="3" height="24" rx="1.5" fill="#15191a"/></svg>`;
+    let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.href = "data:image/svg+xml," + encodeURIComponent(svg);
+  }, [state?.kind, state?.color, config?.palette]);
+
   const commitConfig = (next: Config) => {
     setConfig(next);
     if (putTimer.current) window.clearTimeout(putTimer.current);
     putTimer.current = window.setTimeout(() => {
-      api.putConfig(next).catch((e) => setErr(String(e)));
+      api.putConfig(next).catch((e) => {
+        // the optimistic edit didn't persist — resync from the engine so the
+        // UI can't keep showing unsaved state, and surface a human message
+        setErr(humanizeSaveError(String(e)));
+        api.getConfig().then(setConfig).catch(() => {});
+      });
     }, 400);
   };
+
+  const armUndo = (label: string) => {
+    if (!config) return;
+    setUndo({ label, config });
+    if (undoTimer.current) window.clearTimeout(undoTimer.current);
+    undoTimer.current = window.setTimeout(() => setUndo(null), 7000);
+  };
+  const doUndo = () => {
+    if (undo) commitConfig(undo.config);
+    setUndo(null);
+  };
+
+  // engine stopped responding (quit, crashed, or mid-update) — don't let the
+  // tab sit on stale data pretending the flag is live
+  if (failures >= 3) {
+    return (
+      <div className="app">
+        <div className="dead">
+          <div className="glyph">
+            <Icon name="plug" size={26} />
+          </div>
+          <h2>Beacon isn't running</h2>
+          <p>The engine stopped responding — it may have quit or be updating.</p>
+          <button className="btn primary" onClick={refreshState}>
+            <Icon name="refresh" size={15} /> Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!state || !config || !effects || !triggerMeta) {
     return (
@@ -163,6 +254,8 @@ export default function App() {
   const changeTrigger = (next: Trigger) =>
     setTriggers(config.triggers.map((t) => (t.id === next.id ? next : t)));
   const deleteTrigger = (id: string) => {
+    const t = config.triggers.find((x) => x.id === id);
+    armUndo(`Deleted ${t?.name || "trigger"}`);
     setTriggers(config.triggers.filter((t) => t.id !== id));
     if (openTrigger === id) setOpenTrigger(null);
   };
@@ -178,8 +271,15 @@ export default function App() {
   const changeRoutine = (next: Routine) =>
     setRoutines(config.routines.map((r) => (r.id === next.id ? next : r)));
   const deleteRoutine = (id: string) => {
+    const r = config.routines.find((x) => x.id === id);
+    armUndo(`Deleted ${r?.name || "routine"}`);
     setRoutines(config.routines.filter((r) => r.id !== id));
     if (openRoutine === id) setOpenRoutine(null);
+  };
+
+  const deletePaletteColor = (i: number) => {
+    armUndo(`Deleted ${palette[i]?.name || "colour"}`);
+    setPalette(palette.filter((_, idx) => idx !== i));
   };
   const addRoutine = () => {
     const id = "r" + Date.now();
@@ -272,7 +372,7 @@ export default function App() {
 
         <div className="content">
           {err && (
-            <div className="banner">
+            <div className="banner error">
               <Icon name="alert" size={18} />
               <div className="bx">{err}</div>
               <button className="btn sm ghost icon" title="Dismiss" onClick={() => setErr(null)}>
@@ -299,8 +399,13 @@ export default function App() {
             </div>
           )}
 
-          <div className="ladder-cap eye">— what's showing now, and what would take over</div>
-          <Ladder activeKind={state.kind} />
+          <div className="ladder-cap eye">
+            — where your status comes from (triggers rank by importance)
+          </div>
+          <Ladder
+            activeKind={state.kind}
+            dimmed={state.kind === "paused" || state.kind === "disconnected"}
+          />
 
           <div className="sec">
             <span className="eye">
@@ -327,6 +432,7 @@ export default function App() {
                   palette={palette}
                   triggerMeta={triggerMeta}
                   active={activeIds.has(t.id) && t.enabled}
+                  regError={(state.hotkey_errors ?? []).includes(t.id)}
                   open={openTrigger === t.id}
                   onOpen={() => setOpenTrigger(openTrigger === t.id ? null : t.id)}
                   onChange={changeTrigger}
@@ -405,6 +511,7 @@ export default function App() {
           palette={palette}
           onChange={setPalette}
           onRecolor={recolorSlot}
+          onDelete={deletePaletteColor}
           onClose={() => setShowPalette(false)}
         />
       )}
@@ -429,6 +536,7 @@ export default function App() {
       {showConflict && (
         <ConflictSheet
           conflict={conflictForSheet}
+          connected={state.device_connected}
           rechecking={rechecking}
           onRecheck={recheck}
           onDismiss={() => setShowConflict(false)}
@@ -459,6 +567,14 @@ export default function App() {
           onApply={picker.onApply}
           onClose={() => setPicker(null)}
         />
+      )}
+      {undo && (
+        <div className="toast" role="status">
+          <span>{undo.label}</span>
+          <button className="btn sm" onClick={doUndo}>
+            <Icon name="refresh" size={13} /> Undo
+          </button>
+        </div>
       )}
     </div>
   );

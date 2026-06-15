@@ -143,17 +143,3 @@ def name_of(slot: str) -> str:
 def dim_rgb(rgb: tuple[int, int, int], factor: float = 0.15) -> tuple[int, int, int]:
     """Scale an RGB triple toward black for the 'dim' off-behavior."""
     return tuple(max(0, min(255, round(c * factor))) for c in rgb)  # type: ignore[return-value]
-
-
-def as_payload() -> list[dict]:
-    """Serializable palette for GET /api/palette."""
-    return [
-        {
-            "slot": s.slot,
-            "name": s.name,
-            "hex": s.hex,
-            "meaning": s.meaning,
-            "off": s.off,
-        }
-        for s in PALETTE
-    ]

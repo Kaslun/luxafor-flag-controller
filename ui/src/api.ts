@@ -71,4 +71,8 @@ export const api = {
 
   setAutostart: (enabled: boolean) =>
     send(enabled ? "POST" : "DELETE", "/api/autostart"),
+
+  // release/re-register global hotkeys while the UI captures a combo
+  suspendHotkeys: () => send("POST", "/api/hotkeys/suspend"),
+  resumeHotkeys: () => send("POST", "/api/hotkeys/resume"),
 };

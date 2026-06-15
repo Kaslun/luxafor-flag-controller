@@ -82,7 +82,7 @@ class BeaconEngine:
         """Record that a UI tab just talked to us (called from GET /api/state)."""
         self._last_client = time.monotonic()
 
-    def client_alive(self, within_seconds: float = 8.0) -> bool:
+    def client_alive(self, within_seconds: float = 75.0) -> bool:
         """True if a UI tab has polled within the window (a tab is open)."""
         return (
             self._last_client is not None
@@ -94,6 +94,11 @@ class BeaconEngine:
         with self.state.lock:
             self.state.focus_seq += 1
             return self.state.focus_seq
+
+    def set_hotkey_errors(self, ids: list[str]) -> None:
+        """Record which hotkey triggers failed to register (combo unavailable)."""
+        with self.state.lock:
+            self.state.hotkey_errors = list(ids)
 
     def toggle_hotkey(self, trigger_id: str) -> None:
         """Flip a hotkey trigger on/off (called from the hotkey thread)."""

@@ -4,15 +4,32 @@ import { Icon } from "../icons";
 import { DAYS, TIERS } from "../model";
 import type { Tier } from "../types";
 
-export function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
+export function Switch({
+  on,
+  onClick,
+  label,
+}: {
+  on: boolean;
+  onClick: () => void;
+  label?: string;
+}) {
   return (
     <div
       className={"switch" + (on ? " on" : "")}
       role="switch"
       aria-checked={on}
+      aria-label={label}
+      tabIndex={0}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick();
+        }
       }}
     />
   );
@@ -48,8 +65,14 @@ export function DayPicker({
   return (
     <div className="daypick">
       {DAYS.map((d, i) => (
-        <button key={i} className={days.includes(i) ? "on" : ""} onClick={() => onToggle(i)}>
-          {d[0]}
+        <button
+          key={i}
+          className={days.includes(i) ? "on" : ""}
+          aria-pressed={days.includes(i)}
+          aria-label={d}
+          onClick={() => onToggle(i)}
+        >
+          {d.slice(0, 2)}
         </button>
       ))}
     </div>
@@ -59,21 +82,30 @@ export function DayPicker({
 export function Brightness({
   value,
   onChange,
+  disabled = false,
 }: {
   value: number;
   onChange: (n: number) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="bright">
+    <div
+      className="bright"
+      title={disabled ? "Brightness has no effect during a pattern effect" : undefined}
+    >
       <Icon name="sun" size={15} />
       <input
         type="range"
         min={10}
         max={100}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
-        aria-label="Brightness"
+        aria-label={`Brightness ${value}%`}
       />
+      <span className="mono" style={{ fontSize: 11, minWidth: 30, textAlign: "right", opacity: disabled ? 0.5 : 1 }}>
+        {value}%
+      </span>
     </div>
   );
 }

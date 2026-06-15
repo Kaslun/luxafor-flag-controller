@@ -48,6 +48,7 @@ class State:
     # triggers (events): raw sampled signals + the currently-firing triggers
     signals: dict = field(default_factory=dict)  # {mic, webcam, lock, *_capturers}
     active_triggers: list = field(default_factory=list)  # [{id,name,color,...}]
+    hotkey_errors: list = field(default_factory=list)  # trigger ids whose combo failed to register
 
     # ambient
     update_available: dict | None = None  # {version, url}
@@ -75,6 +76,7 @@ class State:
                 "locked": self.locked,
                 "signals": dict(self.signals),
                 "active_triggers": [dict(t) for t in self.active_triggers],
+                "hotkey_errors": list(self.hotkey_errors),
                 "device_connected": self.device_connected,
                 "manual_override": (
                     dict(self.manual_override) if self.manual_override else None

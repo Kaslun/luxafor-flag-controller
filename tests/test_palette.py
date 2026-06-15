@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from engine.palette import SLOTS, as_payload, rgb_of
+from engine.palette import SLOTS, rgb_of
 
 
-def test_payload_exposes_design_hex_not_device_rgb():
-    # the UI swatch must show the designer's display hex
-    pal = {p["slot"]: p for p in as_payload()}
-    assert pal["available"]["hex"] == "#2FCB6F"
-    assert pal["away"]["hex"] == "#FFC93D"
+def test_seed_display_hex_is_design_hex():
+    # the seed slots carry the designer's display hex (served via the editable
+    # palette's default; see tests/test_palette_config.py for the live path)
+    assert SLOTS["available"].hex == "#2FCB6F"
+    assert SLOTS["away"].hex == "#FFC93D"
 
 
 def test_rgb_of_returns_led_tuned_values():
