@@ -191,7 +191,7 @@ export function TriggerRow({
           <div className={"r-name" + (t.name ? "" : " placeholder")}>{t.name || "Untitled"}</div>
           <div className="r-meta">
             <Icon name={triggerIcon(t.type)} size={13} />
-            <span>{needsHotkey ? hotkeyLabel(t.params) : typeMeta?.name}</span>
+            <span>{summary}</span>
             {needsHotkey && regError && (
               <>
                 <span className="sep">·</span>
@@ -253,18 +253,14 @@ export function TriggerRow({
 
           {needsApp && (
             <div className="field">
-              <label>— app name contains</label>
+              <label>{appLabel}</label>
               <input
                 className="input"
                 value={t.params.app ?? ""}
                 placeholder="e.g. teams, zoom, slack"
                 onChange={(e) => set({ params: { ...t.params, app: e.target.value } })}
               />
-              <p className="hint">
-                {detected.length
-                  ? "On mic now: " + detected.map(shortApp).join(", ")
-                  : "No apps are using the microphone right now."}
-              </p>
+              <p className="hint">{appHint}</p>
             </div>
           )}
 
