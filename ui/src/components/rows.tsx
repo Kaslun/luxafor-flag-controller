@@ -264,6 +264,23 @@ export function TriggerRow({
             </div>
           )}
 
+          {needsMinutes && (
+            <div className="field">
+              <label>— minutes idle</label>
+              <input
+                className="input mono"
+                type="number"
+                min={1}
+                max={999}
+                value={t.params.minutes ?? 5}
+                onChange={(e) =>
+                  set({ params: { ...t.params, minutes: Math.max(1, Number(e.target.value) || 1) } })
+                }
+              />
+              <p className="hint">Fires once the keyboard and mouse have been idle this long.</p>
+            </div>
+          )}
+
           {needsHotkey && (
             <div className="field">
               <label>— shortcut</label>
