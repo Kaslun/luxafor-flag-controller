@@ -122,14 +122,43 @@ export function TriggerRow({
   const typeMeta = triggerMeta.types.find((x) => x.id === t.type) || triggerMeta.types[0];
   const needsApp = typeMeta?.needs_app ?? false;
   const needsHotkey = typeMeta?.needs_hotkey ?? false;
+  const needsMinutes = typeMeta?.needs_minutes ?? false;
   const tier = tierOf(t.priority);
   const set = (patch: Partial<Trigger>) => onChange({ ...t, ...patch });
 
+  // label + placeholder for the text-match field varies by trigger type
+  const appLabel =
+    t.type === "foreground"
+      ? "— app or window title contains"
+      : t.type === "process"
+      ? "— process name contains"
+      : "— app name contains";
+  const appHint =
+    t.type === "foreground"
+      ? "Matches the focused window's app name or title."
+      : t.type === "process"
+      ? "Fires whenever a process with this name is running."
+      : detected.length
+      ? "On mic now: " + detected.map(shortApp).join(", ")
+      : "No apps are using the microphone right now.";
+
+  // short summary shown in the collapsed row
+  const summary = needsHotkey
+    ? hotkeyLabel(t.params)
+    : needsMinutes
+    ? `after ${t.params.minutes ?? 5} min idle`
+    : needsApp && t.params.app
+    ? `“${t.params.app}”`
+    : typeMeta?.name;
+
   useEffect(() => {
-    if (open && needsApp) {
+    if (open && t.type === "mic_app") {
       api.getSignals().then((s) => setDetected(s.mic_capturers ?? [])).catch(() => {});
     }
-  }, [open, needsApp]);
+  }, [open, t.type]);
+
+  const editId = `trigger-edit-${t.id}`;
+  const triggerLabel = t.name || "Untitled trigger";
 
   return (
     <div className={"row" + (open ? " open" : "") + (t.enabled ? "" : " disabled")}>
@@ -141,11 +170,21 @@ export function TriggerRow({
         />
         <span
           className="swatch"
+          role="button"
+          tabIndex={0}
+          aria-label={`Change colour (currently ${nameOf(palette, t.color)})`}
           style={swatchStyle(hex)}
           title="Change colour"
           onClick={(e) => {
             e.stopPropagation();
             onPickColor();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === " " || e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              onPickColor();
+            }
           }}
         />
         <div className="r-info">
@@ -169,13 +208,22 @@ export function TriggerRow({
         </div>
         <div className="r-right" onClick={(e) => e.stopPropagation()}>
           <span className="tier-tag">{tierLabel(tier)}</span>
-          <Switch on={t.enabled} onClick={() => set({ enabled: !t.enabled })} />
-          <Icon name="chevron" size={18} className="chev" />
+          <Switch on={t.enabled} onClick={() => set({ enabled: !t.enabled })} label={`${triggerLabel} enabled`} />
+          <button
+            type="button"
+            className="chev-btn"
+            aria-expanded={open}
+            aria-controls={editId}
+            aria-label={`${open ? "Collapse" : "Expand"} ${triggerLabel}`}
+            onClick={onOpen}
+          >
+            <Icon name="chevron" size={18} className="chev" />
+          </button>
         </div>
       </div>
 
       {open && (
-        <div className="row-edit" onClick={(e) => e.stopPropagation()}>
+        <div id={editId} className="row-edit" onClick={(e) => e.stopPropagation()}>
           <div className="egrid">
             <div className="field">
               <label>— name</label>
@@ -316,6 +364,9 @@ export function RoutineRow({
     set({ days: has ? r.days.filter((x) => x !== d) : [...r.days, d] });
   };
 
+  const editId = `routine-edit-${r.id}`;
+  const routineLabel = r.name || "Untitled routine";
+
   return (
     <div className={"row" + (open ? " open" : "") + (r.enabled ? "" : " disabled")}>
       <div className="row-main" onClick={onOpen}>
@@ -326,11 +377,21 @@ export function RoutineRow({
         />
         <span
           className="swatch"
+          role="button"
+          tabIndex={0}
+          aria-label={`Change colour (currently ${nameOf(palette, r.color)})`}
           style={swatchStyle(hex)}
           title="Change colour"
           onClick={(e) => {
             e.stopPropagation();
             onPickColor();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === " " || e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              onPickColor();
+            }
           }}
         />
         <div className="r-info">
@@ -351,13 +412,22 @@ export function RoutineRow({
           </div>
         </div>
         <div className="r-right" onClick={(e) => e.stopPropagation()}>
-          <Switch on={r.enabled} onClick={() => set({ enabled: !r.enabled })} />
-          <Icon name="chevron" size={18} className="chev" />
+          <Switch on={r.enabled} onClick={() => set({ enabled: !r.enabled })} label={`${routineLabel} enabled`} />
+          <button
+            type="button"
+            className="chev-btn"
+            aria-expanded={open}
+            aria-controls={editId}
+            aria-label={`${open ? "Collapse" : "Expand"} ${routineLabel}`}
+            onClick={onOpen}
+          >
+            <Icon name="chevron" size={18} className="chev" />
+          </button>
         </div>
       </div>
 
       {open && (
-        <div className="row-edit" onClick={(e) => e.stopPropagation()}>
+        <div id={editId} className="row-edit" onClick={(e) => e.stopPropagation()}>
           <div className="egrid">
             <div className="field">
               <label>— name</label>
@@ -376,6 +446,7 @@ export function RoutineRow({
                   className="input mono"
                   type="time"
                   value={r.start}
+                  aria-label={`${routineLabel} start time`}
                   onChange={(e) => set({ start: e.target.value })}
                 />
                 <span>–</span>
@@ -383,6 +454,7 @@ export function RoutineRow({
                   className="input mono"
                   type="time"
                   value={r.end}
+                  aria-label={`${routineLabel} end time`}
                   onChange={(e) => set({ end: e.target.value })}
                 />
               </div>

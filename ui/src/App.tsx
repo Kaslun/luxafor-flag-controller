@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { usePolling } from "./hooks/usePolling";
-import { useTheme } from "./theme";
+import { useTheme, useShapeCues } from "./theme";
 import { hexOf, inkFor, makeEffect, effectType } from "./model";
 import type {
   Config,
@@ -61,6 +61,7 @@ function routineActiveNow(r: Routine, now: Date): boolean {
 
 export default function App() {
   const [theme, toggleTheme] = useTheme();
+  const [shapeCues, toggleShapeCues] = useShapeCues();
   const {
     data: state,
     failures,
@@ -187,17 +188,26 @@ export default function App() {
     link.href = "data:image/svg+xml," + encodeURIComponent(svg);
   }, [state?.kind, state?.color, config?.palette]);
 
-  const commitConfig = (next: Config) => {
+  const commitConfig = (next: Config, opts?: { immediate?: boolean }) => {
     setConfig(next);
     if (putTimer.current) window.clearTimeout(putTimer.current);
-    putTimer.current = window.setTimeout(() => {
-      api.putConfig(next).catch((e) => {
-        // the optimistic edit didn't persist — resync from the engine so the
-        // UI can't keep showing unsaved state, and surface a human message
-        setErr(humanizeSaveError(String(e)));
-        api.getConfig().then(setConfig).catch(() => {});
-      });
-    }, 400);
+    const send = () => {
+      api
+        .putConfig(next)
+        // a delete can flip what the engine reports as live (e.g. the
+        // deleted routine was active) — refresh right away instead of
+        // waiting on the next poll tick, so the hero/pipeline don't sit on
+        // stale "Routine · now" state before self-correcting
+        .then(refreshState)
+        .catch((e) => {
+          // the optimistic edit didn't persist — resync from the engine so the
+          // UI can't keep showing unsaved state, and surface a human message
+          setErr(humanizeSaveError(String(e)));
+          api.getConfig().then(setConfig).catch(() => {});
+        });
+    };
+    if (opts?.immediate) send();
+    else putTimer.current = window.setTimeout(send, 400);
   };
 
   const armUndo = (label: string) => {
@@ -246,8 +256,10 @@ export default function App() {
   const now = new Date();
 
   /* ----- config edits ----- */
-  const setTriggers = (triggers: Trigger[]) => commitConfig({ ...config, triggers });
-  const setRoutines = (routines: Routine[]) => commitConfig({ ...config, routines });
+  const setTriggers = (triggers: Trigger[], immediate = false) =>
+    commitConfig({ ...config, triggers }, { immediate });
+  const setRoutines = (routines: Routine[], immediate = false) =>
+    commitConfig({ ...config, routines }, { immediate });
   const setPalette = (p: PaletteColor[]) => commitConfig({ ...config, palette: p });
   const setSettings = (s: Config["settings"]) => commitConfig({ ...config, settings: s });
 
@@ -256,7 +268,7 @@ export default function App() {
   const deleteTrigger = (id: string) => {
     const t = config.triggers.find((x) => x.id === id);
     armUndo(`Deleted ${t?.name || "trigger"}`);
-    setTriggers(config.triggers.filter((t) => t.id !== id));
+    setTriggers(config.triggers.filter((t) => t.id !== id), true);
     if (openTrigger === id) setOpenTrigger(null);
   };
   const addTrigger = () => {
@@ -273,7 +285,7 @@ export default function App() {
   const deleteRoutine = (id: string) => {
     const r = config.routines.find((x) => x.id === id);
     armUndo(`Deleted ${r?.name || "routine"}`);
-    setRoutines(config.routines.filter((r) => r.id !== id));
+    setRoutines(config.routines.filter((r) => r.id !== id), true);
     if (openRoutine === id) setOpenRoutine(null);
   };
 
@@ -349,7 +361,11 @@ export default function App() {
   const conflictForSheet = state.conflict_detected ?? { luxafor_v2_running: false, luxafor_v2_startup: false };
 
   return (
-    <div className="app" style={{ ["--live" as string]: live, ["--live-ink" as string]: liveInk }}>
+    <div
+      className="app"
+      data-cue={shapeCues ? "shape" : undefined}
+      style={{ ["--live" as string]: live, ["--live-ink" as string]: liveInk }}
+    >
       <Header
         theme={theme}
         version={state.version}
@@ -523,6 +539,8 @@ export default function App() {
           autostart={state.autostart_enabled}
           update={state.update_available}
           checking={checkingUpdate}
+          shapeCues={shapeCues}
+          onToggleShapeCues={toggleShapeCues}
           onChange={setSettings}
           onToggleAutostart={toggleAutostart}
           onPickResting={pickResting}

@@ -75,4 +75,7 @@ export const api = {
   // release/re-register global hotkeys while the UI captures a combo
   suspendHotkeys: () => send("POST", "/api/hotkeys/suspend"),
   resumeHotkeys: () => send("POST", "/api/hotkeys/resume"),
+
+  // briefly force a trigger active so the user can see it fire
+  testTrigger: (id: string) => send("POST", `/api/triggers/${id}/test`),
 };

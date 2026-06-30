@@ -170,6 +170,12 @@ def create_app(engine) -> FastAPI:
     def get_triggers_meta():
         return triggers_meta()
 
+    @app.post("/api/triggers/{trigger_id}/test")
+    def post_trigger_test(trigger_id: str):
+        # briefly force the trigger active so the user can see it fire
+        engine.test_trigger(trigger_id)
+        return {"testing": trigger_id}
+
     @app.get("/api/signals")
     def get_signals():
         # currently-detected capturers, so the mic_app editor can offer a

@@ -36,7 +36,7 @@ export function Ladder({ activeKind, dimmed = false }: { activeKind: Kind; dimme
               {on && <span className="nowtag">now</span>}
             </div>
             {i < rungs.length - 1 && (
-              <span className="rung-sep">
+              <span className="rung-sep" title="Priority order — not interactive" aria-hidden="true">
                 <Icon name="chevron" size={15} className="caret" />
               </span>
             )}

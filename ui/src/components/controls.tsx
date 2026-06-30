@@ -103,7 +103,7 @@ export function Brightness({
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label={`Brightness ${value}%`}
       />
-      <span className="mono" style={{ fontSize: 11, minWidth: 30, textAlign: "right", opacity: disabled ? 0.5 : 1 }}>
+      <span className="mono" style={{ fontSize: 12, minWidth: 30, textAlign: "right", opacity: disabled ? 0.5 : 1 }}>
         {value}%
       </span>
     </div>

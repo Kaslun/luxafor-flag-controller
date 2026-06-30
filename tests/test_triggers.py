@@ -30,8 +30,12 @@ def _trigger(**kw) -> dict:
 # ----------------------------------------------------------- validation
 
 def test_accepts_all_known_types():
-    for t in ("mic", "mic_app", "webcam", "lock", "hotkey"):
-        params = {"app": "teams"} if t == "mic_app" else {}
+    from engine.config import TRIGGER_TYPES
+
+    for t in TRIGGER_TYPES:
+        params = {"app": "teams"} if t in ("mic_app", "foreground", "process") else {}
+        if t == "idle":
+            params = {"minutes": 10}
         cfg = config_from_dict(
             {"routines": [], "triggers": [_trigger(type=t, params=params)], "settings": {}}
         )
@@ -165,12 +169,72 @@ def test_capturer_matches_empty_never_matches():
 def test_triggers_meta_shape():
     m = triggers_meta()
     type_ids = {t["id"] for t in m["types"]}
-    assert type_ids == {"mic", "mic_app", "webcam", "lock", "hotkey"}
+    assert type_ids == {
+        "mic", "mic_app", "webcam", "lock", "hotkey",
+        "idle", "foreground", "presentation", "process",
+    }
     assert m["override_priority"] == 50
     needs = {t["id"]: t["needs_app"] for t in m["types"]}
     assert needs["mic_app"] is True and needs["mic"] is False
+    assert needs["foreground"] is True and needs["process"] is True
     hk = next(t for t in m["types"] if t["id"] == "hotkey")
     assert hk["needs_hotkey"] is True
+    idle = next(t for t in m["types"] if t["id"] == "idle")
+    assert idle["needs_minutes"] is True
+
+
+def test_new_trigger_dispatch():
+    from engine.loop import BeaconEngine
+    from engine.config import Trigger
+
+    eng = BeaconEngine()
+    probes = {
+        "mic": False, "webcam": False, "lock": False,
+        "mic_capturers": [], "webcam_capturers": [],
+        "idle_seconds": 0.0, "foreground": ("", ""),
+        "presentation": False, "processes": [],
+    }
+
+    def trig(type, **params):
+        return Trigger("x", "X", True, type, "busy", 50, params, {"type": "solid"})
+
+    # idle: fires once past the threshold
+    probes["idle_seconds"] = 0.0
+    assert eng._trigger_active(trig("idle", minutes=5), probes) is False
+    probes["idle_seconds"] = 5 * 60 + 1
+    assert eng._trigger_active(trig("idle", minutes=5), probes) is True
+
+    # foreground: matches exe or title
+    probes["foreground"] = ("powerpnt.exe", "deck — powerpoint")
+    assert eng._trigger_active(trig("foreground", app="powerpnt"), probes) is True
+    assert eng._trigger_active(trig("foreground", app="zoom"), probes) is False
+
+    # presentation
+    probes["presentation"] = True
+    assert eng._trigger_active(trig("presentation"), probes) is True
+
+    # process: substring over running names
+    probes["processes"] = ["explorer.exe", "code.exe"]
+    assert eng._trigger_active(trig("process", app="code"), probes) is True
+    assert eng._trigger_active(trig("process", app="photoshop"), probes) is False
+
+
+def test_test_trigger_forces_active():
+    from engine.loop import BeaconEngine
+
+    eng = BeaconEngine()
+    eng.config = config_from_dict(
+        {
+            "routines": [],
+            "triggers": [_trigger(id="t1", type="webcam", color="focus")],
+            "settings": {},
+        }
+    )
+    _, active = eng._evaluate_triggers()
+    assert active == []  # webcam not in use
+    eng.test_trigger("t1", seconds=30)
+    _, active = eng._evaluate_triggers()
+    assert [a["id"] for a in active] == ["t1"]
 
 
 def test_hotkey_trigger_toggle():

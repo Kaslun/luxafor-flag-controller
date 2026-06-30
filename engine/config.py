@@ -39,7 +39,17 @@ class ConfigError(ValueError):
 # Trigger condition types. Each maps to a detector evaluated each tick
 # (see engine.loop). "mic" and "lock" are the unified successors of the old
 # call_detection / lock_detection settings.
-TRIGGER_TYPES = ("mic", "mic_app", "webcam", "lock", "hotkey")
+TRIGGER_TYPES = (
+    "mic",
+    "mic_app",
+    "webcam",
+    "lock",
+    "hotkey",
+    "idle",
+    "foreground",
+    "presentation",
+    "process",
+)
 
 # Triggers resolve in importance bands relative to the manual override and to
 # routines (see engine.resolver). A trigger with priority strictly above
@@ -57,11 +67,15 @@ def triggers_meta() -> dict:
     """Trigger vocabulary for the UI (GET /api/triggers/meta)."""
     return {
         "types": [
-            {"id": "mic", "name": "In a call (mic in use)", "needs_app": False, "needs_hotkey": False},
-            {"id": "mic_app", "name": "Specific app on mic", "needs_app": True, "needs_hotkey": False},
-            {"id": "webcam", "name": "Webcam in use", "needs_app": False, "needs_hotkey": False},
-            {"id": "lock", "name": "Screen locked", "needs_app": False, "needs_hotkey": False},
-            {"id": "hotkey", "name": "Keyboard shortcut", "needs_app": False, "needs_hotkey": True},
+            {"id": "mic", "name": "In a call (mic in use)", "needs_app": False, "needs_hotkey": False, "needs_minutes": False},
+            {"id": "mic_app", "name": "Specific app on mic", "needs_app": True, "needs_hotkey": False, "needs_minutes": False},
+            {"id": "webcam", "name": "Webcam in use", "needs_app": False, "needs_hotkey": False, "needs_minutes": False},
+            {"id": "lock", "name": "Screen locked", "needs_app": False, "needs_hotkey": False, "needs_minutes": False},
+            {"id": "hotkey", "name": "Keyboard shortcut", "needs_app": False, "needs_hotkey": True, "needs_minutes": False},
+            {"id": "idle", "name": "Idle / away", "needs_app": False, "needs_hotkey": False, "needs_minutes": True},
+            {"id": "foreground", "name": "Active app / window", "needs_app": True, "needs_hotkey": False, "needs_minutes": False},
+            {"id": "presentation", "name": "Presenting / full-screen", "needs_app": False, "needs_hotkey": False, "needs_minutes": False},
+            {"id": "process", "name": "App is running", "needs_app": True, "needs_hotkey": False, "needs_minutes": False},
         ],
         "priority_min": PRIORITY_MIN,
         "priority_max": PRIORITY_MAX,

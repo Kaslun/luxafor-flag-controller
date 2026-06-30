@@ -385,6 +385,8 @@ export function SettingsModal({
   autostart,
   update,
   checking,
+  shapeCues,
+  onToggleShapeCues,
   onChange,
   onToggleAutostart,
   onPickResting,
@@ -400,6 +402,8 @@ export function SettingsModal({
   autostart: boolean;
   update: UpdateAvailable | null;
   checking: boolean;
+  shapeCues: boolean;
+  onToggleShapeCues: () => void;
   onChange: (s: Settings) => void;
   onToggleAutostart: () => void;
   onPickResting: () => void;
@@ -467,6 +471,21 @@ export function SettingsModal({
                       </button>
                     ))}
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p className="set-cap">— accessibility</p>
+            <div className="set-group">
+              <div className="set-row">
+                <div className="si">
+                  <h3>Shape &amp; motion cues</h3>
+                  <p>Mark "now" and active states with a pulse and ring, not colour alone — helps if red/green is hard to tell apart.</p>
+                </div>
+                <div className="set-ctl">
+                  <Switch on={shapeCues} onClick={onToggleShapeCues} label="Shape and motion cues" />
                 </div>
               </div>
             </div>

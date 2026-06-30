@@ -27,7 +27,7 @@ import os
 import threading
 import time
 
-from engine import autostart, conflict, effects, mic, selfupdate, session, updater, webcam
+from engine import autostart, conflict, effects, mic, selfupdate, session, sysprobe, updater, webcam
 from engine.hotkeys import HotkeyManager
 from engine.config import Config, Trigger, load_config, save_config
 from engine.device import Flag
@@ -76,7 +76,17 @@ class BeaconEngine:
         # last time a UI tab polled us — used to avoid spawning duplicate tabs
         self._last_client: float | None = None
 
+        # triggers being test-fired from the UI -> monotonic expiry
+        self._test_until: dict[str, float] = {}
+
     # ------------------------------------------------------------ commands
+
+    def test_trigger(self, trigger_id: str, seconds: float = 3.0) -> None:
+        """Briefly force a trigger active so the user can see it fire."""
+        self._test_until[trigger_id] = time.monotonic() + seconds
+        self.request_tick()
+        # wake again when the test expires so the flag reverts promptly
+        threading.Timer(seconds + 0.1, self.request_tick).start()
 
     def note_client(self) -> None:
         """Record that a UI tab just talked to us (called from GET /api/state)."""
@@ -270,6 +280,25 @@ class BeaconEngine:
         if t.type == "hotkey":
             with self._hotkey_lock:
                 return t.id in self._hotkey_on
+        if t.type == "idle":
+            try:
+                mins = int(t.params.get("minutes") or 5)
+            except (TypeError, ValueError):
+                mins = 5
+            return signals["idle_seconds"] >= max(1, mins) * 60
+        if t.type == "foreground":
+            tok = str(t.params.get("app", "")).strip().lower()
+            if not tok:
+                return False
+            exe, title = signals["foreground"]
+            return tok in exe or tok in title
+        if t.type == "presentation":
+            return signals["presentation"]
+        if t.type == "process":
+            tok = str(t.params.get("app", "")).strip().lower()
+            if not tok:
+                return False
+            return any(tok in n for n in signals["processes"])
         return False
 
     def _evaluate_triggers(self) -> tuple[dict, list[dict]]:
@@ -289,21 +318,33 @@ class BeaconEngine:
         mic_caps = _safe(mic.mic_capturers, [])
         cam_caps = _safe(webcam.webcam_capturers, [])
         locked = _safe(session.screen_locked, False)
-        signals = {
+        # full probe set used for matching only — the heavy/sensitive ones
+        # (process list, foreground window title) are NOT published to state
+        probes = {
             "mic": bool(mic_caps),
             "webcam": bool(cam_caps),
             "lock": bool(locked),
             "mic_capturers": mic_caps,
             "webcam_capturers": cam_caps,
+            "idle_seconds": _safe(sysprobe.idle_seconds, 0.0),
+            "foreground": _safe(sysprobe.foreground, ("", "")),
+            "presentation": _safe(sysprobe.in_presentation, False),
+            "processes": _safe(sysprobe.process_names, []),
         }
 
+        nowm = time.monotonic()
         active: list[dict] = []
         for t in self.config.triggers:
             if not t.enabled:
                 continue
+            tested = self._test_until.get(t.id, 0.0) > nowm
             try:
-                if self._trigger_active(t, signals):
-                    active.append(
+                fired = tested or self._trigger_active(t, probes)
+            except Exception:
+                log.debug("trigger %r evaluation failed", t.id, exc_info=True)
+                fired = tested
+            if fired:
+                active.append(
                         {
                             "id": t.id,
                             "name": t.name,
@@ -313,8 +354,17 @@ class BeaconEngine:
                             "effect": t.effect,
                         }
                     )
-            except Exception:
-                log.debug("trigger %r evaluation failed", t.id, exc_info=True)
+        # drop expired test fires
+        self._test_until = {k: v for k, v in self._test_until.items() if v > nowm}
+
+        # publish only the small, non-sensitive signal subset to state
+        signals = {
+            "mic": probes["mic"],
+            "webcam": probes["webcam"],
+            "lock": probes["lock"],
+            "mic_capturers": mic_caps,
+            "webcam_capturers": cam_caps,
+        }
         return signals, active
 
     def tick(self) -> None:

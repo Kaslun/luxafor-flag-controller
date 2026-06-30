@@ -217,6 +217,14 @@ export function triggerIcon(type: TriggerType): string {
       return "lock";
     case "hotkey":
       return "keyboard";
+    case "idle":
+      return "moon";
+    case "foreground":
+      return "cursor";
+    case "presentation":
+      return "bolt";
+    case "process":
+      return "power";
     default:
       return "mic";
   }
